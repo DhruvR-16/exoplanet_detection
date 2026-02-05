@@ -1,0 +1,6 @@
+.venv3.12/
+__pycache__/
+sync.txt
+.github/
+data/
+lc_cache/

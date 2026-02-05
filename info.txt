@@ -1,0 +1,21 @@
+TESS data is stored at MAST Archive:https://archive.stsci.edu/tess/bulk_downloads.html
+
+If you want, next I can show how to convert that probability into a decision threshold system like professional pipelines use.
+
+Next step after this would be:
+Adding transit shape symmetry feature or moving to CNN-based classifier.
+
+if the prediciton is already made then get that from the csv instead of making a new one(saved time)
+
+1) multiple tess sectors
+2) transit symmetry
+3) transit flatness
+4) transit duration vs excepted duration
+5) combine xgboost randomforest (take weighted avg)
+6) 
+
+1️⃣ Add shape features
+2️⃣ Add odd-even test (stronger version)
+3️⃣ Add TLS model fit metrics
+4️⃣ Add statistical confidence (SDE threshold)
+5️⃣ Add multi-sector check
