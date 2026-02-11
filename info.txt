@@ -5,17 +5,27 @@ If you want, next I can show how to convert that probability into a decision thr
 Next step after this would be:
 Adding transit shape symmetry feature or moving to CNN-based classifier.
 
-if the prediciton is already made then get that from the csv instead of making a new one(saved time)
+
+
 
 1) multiple tess sectors
 2) transit symmetry
 3) transit flatness
 4) transit duration vs excepted duration
 5) combine xgboost randomforest (take weighted avg)
-6) 
+6) add cross validation, calibration, probability calibration
 
-1️⃣ Add shape features
-2️⃣ Add odd-even test (stronger version)
-3️⃣ Add TLS model fit metrics
-4️⃣ Add statistical confidence (SDE threshold)
-5️⃣ Add multi-sector check
+7) Add shape features
+8) Add odd-even test (stronger version)
+9) Add TLS model fit metrics
+10) Add statistical confidence (SDE threshold)
+11) Add multi-sector check
+12) No statistical false-alarm probability
+13) No stellar parameter constraints
+    Transit duration must match:
+        Star radius
+        Orbital period
+
+14) Data scale + statistical rigor. (Priority)
+15) use keppler 
+16) cache only processed data not raw.   (Priority)
