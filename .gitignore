@@ -33,4 +33,4 @@ backend/__pycache__/
 Thumbs.db
 desktop.ini
 
-
+pipeline_cache/
