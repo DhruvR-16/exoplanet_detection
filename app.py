@@ -425,6 +425,19 @@ if analyze_button and target_star:
         else:
             st.success(f"✅ **Transit Physics Passed:** Observed duration is within limits ({duration_ratio:.2f}x of maximum circular limit).")
 
+    vet_col3, vet_col4 = st.columns(2)
+    with vet_col3:
+        if not density_ok:
+            st.warning(f"⚠️ **Stellar Density Alert:** Transit-implied density is {density_ratio:.3f}x the catalog stellar density. Physically anomalous mismatch.")
+        else:
+            st.success(f"✅ **Stellar Density Passed:** Density ratio is consistent ({density_ratio:.2f}x of catalog stellar density).")
+            
+    with vet_col4:
+        if has_secondary:
+            st.warning(f"⚠️ **Secondary Eclipse Alert:** Detected secondary eclipse at phase 0.5 (Depth = {secondary_depth:.4f}, SNR = {secondary_snr:.1f}). Likely a stellar companion binary.")
+        else:
+            st.success(f"✅ **Secondary Eclipse Passed:** No secondary eclipse detected at phase 0.5 (SNR = {secondary_snr:.1f} < 3.0).")
+
     st.markdown("---")
     st.subheader("Lightcurve Visualizations")
     
