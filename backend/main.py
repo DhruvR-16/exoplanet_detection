@@ -154,7 +154,7 @@ def odd_even_test(time, flux, period, duration, t0):
     even_mask = in_transit & (transit_number % 2 == 0)
     
     if np.sum(odd_mask) < 3 or np.sum(even_mask) < 3:
-        return 0, 0, 0
+        return 0.0, 0.0, 0.0, 1.0
     
     odd_flux = flux[odd_mask]
     even_flux = flux[even_mask]
@@ -175,8 +175,18 @@ def odd_even_test(time, flux, period, duration, t0):
         mad_ratio = np.clip(mad_ratio, 0.01, 100)
         mad_ratio = abs(np.log(mad_ratio))
     else:
-        mad_ratio = 0
-    return depth_diff, duration_diff, mad_ratio
+        mad_ratio = 0.0
+        
+    # Run Welch's t-test to check if odd/even transit depth distributions differ significantly
+    try:
+        from scipy import stats
+        t_stat, p_val = stats.ttest_ind(odd_flux, even_flux, equal_var=False)
+        welch_p = float(p_val) if np.isfinite(p_val) else 1.0
+    except:
+        welch_p = 1.0
+        
+    return depth_diff, duration_diff, mad_ratio, welch_p
+
 
 def check_multi_sector(target):
     try:
@@ -216,7 +226,7 @@ async def analyze_target(req: AnalysisRequest):
     odd_even_mismatch = to_scalar(tls_results.odd_even_mismatch if hasattr(tls_results, 'odd_even_mismatch') else 0)
     
     symmetry, shape_ratio, depth_std = calculate_shape_features(time_arr, flat_flux, period, duration, t0)
-    depth_diff, duration_diff, mad_ratio = odd_even_test(time_arr, flat_flux, period, duration, t0)
+    depth_diff, duration_diff, mad_ratio, welch_p = odd_even_test(time_arr, flat_flux, period, duration, t0)
     
     raw_features = [
         period, depth, duration, snr, sde_pass, rp_rs, snr_pink, odd_even_mismatch,
@@ -269,6 +279,7 @@ async def analyze_target(req: AnalysisRequest):
         "target": target_star,
         "predictions": model_predictions,
         "features": dict(zip(feature_names, features)),
+        "welch_p": welch_p,
         "plot_data": plot_data
     }
 
