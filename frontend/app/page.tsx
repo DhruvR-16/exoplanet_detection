@@ -36,6 +36,7 @@ type AnalysisResult = {
   target: string;
   predictions: Prediction[];
   features: Record<string, number>;
+  welch_p?: number;
   plot_data: {
     time: number[];
     raw_flux: number[];
@@ -304,6 +305,28 @@ export default function Home() {
                     })}
                   </div>
                 </div>
+
+                {result.welch_p !== undefined && (
+                  <div className={`p-5 rounded-xl border ${result.welch_p < 0.01 ? 'bg-red-950/20 border-red-900/40 text-red-300' : 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300'} flex items-start gap-4 shadow-lg`}>
+                    {result.welch_p < 0.01 ? (
+                      <>
+                        <svg className="w-6 h-6 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        <div>
+                          <h4 className="font-bold text-white mb-1 font-mono tracking-wide">Eclipsing Binary Vetting Alert</h4>
+                          <p className="text-sm opacity-90">A significant depth difference was detected between odd and even transits (Welch's t-test p-value = {result.welch_p.toExponential(4)}). This indicates a high likelihood of a background eclipsing binary companion rather than a transiting planet.</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-6 h-6 text-emerald-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <div>
+                          <h4 className="font-bold text-white mb-1 font-mono tracking-wide">Odd-Even Depth Consistency Passed</h4>
+                          <p className="text-sm opacity-90">Odd and even transits have consistent depths (Welch's t-test p-value = {result.welch_p.toFixed(3)} &gt; 0.01), supporting the planetary hypothesis.</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {selectedModel && (
                   <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
