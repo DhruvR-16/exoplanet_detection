@@ -1,88 +1,231 @@
 # 🪐 Exoplanet Detection Pipeline & Web Dashboard
 
-An end-to-end Machine Learning pipeline and interactive web application designed to automatically detect exoplanet transit signatures from raw TESS (Transiting Exoplanet Survey Satellite) lightcurve data. 
+An end-to-end, physics-informed machine learning pipeline and interactive web application for automatically detecting exoplanet transit signatures from raw **TESS (Transiting Exoplanet Survey Satellite)** lightcurve data.
 
-The system leverages a hybrid physical-statistical approach combined with an Ensemble Machine Learning model (Random Forest + XGBoost) to predict whether a given star system hosts an exoplanet.
+The system combines a hybrid physical-statistical approach with a calibrated **Ensemble ML model (Random Forest + XGBoost)** to predict whether a given star system hosts an exoplanet — and provides diagnostic visualizations for human vetting.
 
 ---
 
 ## ✨ Key Features
 
-*   **Live TESS Data Fetching:** Automatically queries the MAST archive using `lightkurve` to download SPOC or custom lightcurves for any TESS target.
-*   **Stellar Detrending:** Removes stellar variability, flares, and long-term instrumental trends using the `wotan` biweight method.
-*   **Transit Least Squares (TLS):** Uses optimized TLS to detect periodic, U-shaped planetary transit dips, even those buried in noise.
-*   **Advanced Feature Extraction:** Computes 16 critical physical and statistical features (e.g., Transit Depth, Signal-to-Noise Ratio, Ingress/Egress shape ratio, Odd-Even mismatch).
-*   **Ensemble ML Model:** A calibrated Random Forest and XGBoost voting classifier that provides a probability score and confidence rating.
-*   **Interactive Web Dashboard:** A sleek, dark-mode Streamlit UI that visualizes raw data, phase-folded transits, and periodograms in real-time.
+- **Live TESS Data Fetching** — Automatically queries the MAST archive via `lightkurve` to download SPOC lightcurves for any TESS target.
+- **Stellar Detrending** — Removes stellar variability, flares, and instrumental trends using the `wotan` biweight filter.
+- **Transit Least Squares (TLS)** — Optimized periodic transit detection using physics-constrained search bounds (stellar radius, mass, limb darkening).
+- **Multi-pass TLS** — Iterative signal subtraction to detect multiple planet candidates in the same system.
+- **16 Physical & Statistical Features** — Transit depth, period, duration, SDE, SNR, Rp/Rs, ingress/egress shape ratio, odd-even depth mismatch, transit symmetry, and more.
+- **Calibrated Ensemble ML Model** — A voting classifier (Random Forest + XGBoost) with probability calibration and StandardScaler normalization.
+- **Difference-Imaging Centroid Analysis** — Pixel-level vetting using Target Pixel Files (TPFs) to reject background eclipsing binaries.
+- **Dual Web Interfaces:**
+  - **Streamlit Dashboard** (`app.py`) — Quick interactive analysis with real-time plots.
+  - **Next.js + FastAPI** (`frontend/` + `backend/`) — Modern, production-grade web application with side-by-side multi-model comparison.
 
 ---
 
 ## 🚀 Getting Started
 
 ### 1. Prerequisites
-Ensure you have Python 3.9+ installed. The project relies on specific astrophysics and machine learning libraries.
+
+Python 3.9+ is required. Install all dependencies:
 
 ```bash
-# Install the required dependencies
-pip install streamlit matplotlib lightkurve wotan transitleastsquares torch xgboost scikit-learn pandas joblib
+pip install streamlit matplotlib lightkurve wotan transitleastsquares torch xgboost scikit-learn pandas joblib fastapi uvicorn scipy astroquery
 ```
 
-### 2. Running the Web UI
-The easiest way to interact with the project is through the Streamlit Web Dashboard. Let the model do the heavy lifting for you!
+For the Next.js frontend:
 
 ```bash
-# Start the Streamlit server
+cd frontend && npm install
+```
+
+### 2. Running the Streamlit Dashboard
+
+```bash
 streamlit run app.py
 ```
-*The dashboard will automatically open in your browser at `http://localhost:8501`.*
 
-**Try these example targets in the UI:**
-*   `TOI-270` (Known multi-planet system)
-*   `TIC 38846515` (Known planet host)
-*   `Ross 176` (Star with no known transits)
+The dashboard opens at `http://localhost:8501`.
 
-### 3. Training the Model (Optional)
-If you want to re-train the model from scratch, gather new training data, or tweak the XGBoost hyperparameters, you can run the provided Jupyter Notebook.
+### 3. Running the Next.js + FastAPI Stack
 
 ```bash
-# Open the main pipeline notebook
+# Terminal 1: Start the FastAPI backend
+cd backend && uvicorn main:app --reload --port 8000
+
+# Terminal 2: Start the Next.js frontend
+cd frontend && npm run dev
+```
+
+The frontend opens at `http://localhost:3000` and calls the API at `http://localhost:8000`.
+
+### 4. Training the Model
+
+Run the training & validation notebook to generate a fresh model:
+
+```bash
 jupyter notebook main.ipynb
 ```
-*Note: Running the full notebook can take 30+ minutes as it downloads and processes lightcurves for hundreds of control and planet stars.*
+
+> **Note:** The notebook downloads and processes lightcurves from MAST, which can take 30+ minutes depending on the number of targets.
+
+### 5. Example Targets
+
+| Target | Description |
+| :--- | :--- |
+| `TOI-270` | Known multi-planet system |
+| `TIC 38846515` | Known planet host |
+| `Ross 176` | Star with no known transits |
+| `TIC 307210830` | Pipeline test case |
 
 ---
 
 ## 📁 Project Structure
 
 ```text
-expoplanet_detection/
-├── app.py                     # Streamlit web application & prediction pipeline
-├── main.ipynb                 # Full training pipeline, data collection, and evaluation
-├── model/                     
-│   ├── exoplanet_model_v1.pkl # Legacy Random Forest model
-│   └── exoplanet_model_v2.pkl # Modern Calibrated Ensemble (RF + XGBoost)
-├── docs/                      
-│   ├── pipeline_improvements.md # Detailed breakdown of recent ML updates
-│   ├── web_ui_guide.md          # User manual for the dashboard
-│   └── future_roadmap.md        # Architectural/Astrophysical plans for v3.0
-├── lc_cache/                  # Local cache of downloaded TESS .fits files
-├── data/                      # Raw CSV datasets and metadata logs
-└── predictions.csv            # Automatically updated log of all UI predictions
+exoplanet_detection/
+├── app.py                 # Streamlit web application & prediction pipeline
+├── main.ipynb             # Training pipeline, data collection, model evaluation
+├── backend/
+│   └── main.py            # FastAPI backend — serves predictions & plot data to Next.js
+├── frontend/
+│   ├── app/
+│   │   ├── page.tsx       # Main React UI with charts, model comparison, feature tables
+│   │   ├── layout.tsx     # Root layout & metadata
+│   │   └── globals.css    # Global styles
+│   ├── package.json       # Node.js dependencies (Next.js, Chart.js, Axios)
+│   ├── tailwind.config.js # Tailwind CSS configuration
+│   └── tsconfig.json      # TypeScript configuration
+├── model/
+│   └── exoplanet_model_v2.pkl  # Calibrated Ensemble (RF + XGBoost) — generated by main.ipynb
+├── data/
+│   ├── PS_2026.02.02_22.30.54.csv               # NASA Exoplanet Archive confirmed planets catalog
+│   ├── q1_q17_dr25_tce_2026.01.27_07.29.56.csv  # Kepler DR25 TCE catalog
+│   └── exo_dataset.csv                           # Extracted training features
+├── lc_cache/              # Cached .fits lightcurve files (auto-downloaded, gitignored)
+├── predictions.csv        # Auto-generated prediction log from UI runs
+├── .gitignore
+└── README.md
 ```
 
 ---
 
-## 🧠 How the Pipeline Works
+## 🧠 How the Current Pipeline Works
 
-1.  **Ingestion:** The user provides a Target ID (e.g., `TIC 307210830`). The pipeline securely downloads the flux data.
-2.  **Cleaning:** `wotan` applies a rolling biweight filter to flatten the lightcurve, isolating quick transit dips.
-3.  **Search:** `transitleastsquares` scans thousands of trial periods and durations to find the strongest periodic signal.
-4.  **Extraction:** Features such as transit symmetry, odd-even depth differences, and pink-noise-aware SNRs are mathematically quantified.
-5.  **Scaling & Prediction:** Features are normalized using `StandardScaler` and passed into the calibrated Ensemble Model.
-6.  **Results:** The app outputs the prediction, probability percentage, and generates diagnostic plots for human verification.
+```
+User Input (TIC ID / TOI Name)
+ ↓
+1. Data Ingestion — Download SPOC lightcurves from MAST via lightkurve
+ ↓
+2. Preprocessing — Remove NaNs, 3σ outlier clipping, per-sector normalization
+ ↓
+3. Detrending — Wotan biweight filter (window = 0.5 days) + slide_clip MAD clipping
+ ↓
+4. Gap-Aware Binning — 10-minute cadence median binning respecting sector gaps
+ ↓
+5. Transit Search — Multi-pass TLS with physics-bounded period range [0.5, 15] days
+ ↓
+6. Feature Extraction — 16 features: period, depth, duration, SDE, Rp/Rs,
+                         SNR_pink, odd-even mismatch, transit symmetry,
+                         shape ratio, depth std, multi-sector count, etc.
+ ↓
+7. ML Classification — Calibrated Ensemble (RF + XGBoost) → probability score
+ ↓
+8. Visualization — Raw flux, detrended flux, phase-folded transit, TLS periodogram
+```
+
+### Physics-Based Vetting Checks (v9.1)
+- **SDE Threshold** — Signal Detection Efficiency ≥ 7.0
+- **Radius Constraint** — Rp < 2.5 R_Jupiter (rejects stellar companions)
+- **Centroid Shift** — Difference-imaging centroid < 0.4 pixels (rejects BEBs)
+- **Odd-Even Test** — Depth consistency between odd and even numbered transits
 
 ---
 
-## 🔮 Future Development
-We have an extensive roadmap planned to transition this from a strong prototype into a professional-grade astronomical tool. Planned features include **Multi-Sector Stitching**, **Gaia DR3 Astrometric filtering**, and **1D-CNN deep learning** models. 
+## 🔮 Future Roadmap: Physics-Informed FFI Pipeline (v10+)
 
+We are planning a major evolution of this pipeline — transitioning from a heuristic ML system into a **physics-informed, deep-learning-augmented detection engine**. The goal is to process TESS Full Frame Images (FFIs) directly and achieve professional-grade candidate vetting.
+
+### Phase 1: Enhanced Detrending
+| Improvement | Description |
+| :--- | :--- |
+| **LSTM/Autoencoder Detrending** | Replace static Wotan filter with a trained LSTM or Autoencoder that learns to separate stellar variability from transit signals. |
+| **PCA / CBV Correction** | Apply Cotrending Basis Vectors (CBVs) to remove systematics shared across targets in the same CCD. |
+| **Multi-Sector Stitching** | Properly normalize and stitch data across multiple TESS sectors with independent per-sector detrending. |
+
+### Phase 2: Deep Learning Transit Detection
+| Improvement | Description |
+| :--- | :--- |
+| **1D-CNN Transit Detector** | A Convolutional Neural Network trained on labeled lightcurves (Kepler DR25 TCEs) to detect transit-shaped dips. |
+| **Transformer-based Detection** | Attention-based models that can capture long-range temporal dependencies in lightcurves. |
+| **Transfer Learning** | Pre-train on Kepler labeled data, fine-tune on TESS targets. |
+
+### Phase 3: Hybrid Classification
+| Improvement | Description |
+| :--- | :--- |
+| **CNN + XGBoost Hybrid** | Use CNN-extracted deep features combined with hand-crafted physics features in a gradient-boosted ensemble. |
+| **Multi-Model Comparison** | Run multiple classifiers in parallel and use weighted averaging or stacking for final predictions. |
+| **Cross-Validation & Calibration** | Implement k-fold stratified cross-validation with Platt scaling or isotonic regression for probability calibration. |
+
+### Phase 4: Physics-Based Vetting
+| Improvement | Description |
+| :--- | :--- |
+| **Transit Duration vs Expected Duration** | Validate that the observed transit duration matches the expected duration given stellar radius, orbital period, and impact parameter (Kepler's third law). |
+| **Stellar Parameter Constraints** | Cross-reference TIC catalog parameters (Teff, logg, R★, M★) to reject physically implausible planet candidates. |
+| **Statistical False-Alarm Probability (FAP)** | Compute formal FAP using bootstrap or injection-recovery tests. |
+| **Secondary Eclipse Detection** | Search for secondary eclipses at phase 0.5 to identify eclipsing binaries. |
+| **Gaia DR3 Astrometric Filtering** | Cross-match with Gaia astrometric data to detect binarity via RUWE or astrometric excess noise. |
+| **Phase-Sorted Transit Symmetry** | Fix the current symmetry calculation to properly sort by folded phase (ingress vs. egress) rather than by observation time. |
+| **Welch's T-Test for Odd-Even** | Replace heuristic depth difference with a formal Welch's t-test (p-value based rejection). |
+| **Proper Centroid Reference Frame** | Compare difference-image centroid against the out-of-transit stellar centroid instead of the pixel grid center. |
+
+### Phase 5: Scale & Infrastructure
+| Improvement | Description |
+| :--- | :--- |
+| **Batch Processing** | Process thousands of TIC targets automatically with result logging to a database. |
+| **Cache Optimization** | Cache only processed/detrended data instead of raw FITS files. |
+| **Kepler Integration** | Extend the pipeline to also process Kepler/K2 mission data. |
+| **GPU Acceleration** | Enable CUDA-based TLS and deep learning inference for 10-100x speedups. |
+
+### Pipeline Architecture Vision (v10+)
+
+```
+TESS Full Frame Image (FFI)
+ ↓
+Light Curve Extraction (aperture photometry / PSF fitting)
+ ↓
+PCA / CBV Detrending → LSTM/Autoencoder Detrending
+ ↓
+Transformer / 1D-CNN Transit Detection
+ ↓
+Deep Feature Extraction (CNN) + Physics Feature Extraction
+ ↓
+Hybrid ML Classification (CNN + XGBoost Ensemble)
+ ↓
+Physics-Based Vetting (duration check, FAP, centroid, Gaia cross-match)
+ ↓
+Ranked Candidate List with Confidence Scores & Diagnostic Plots
+```
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Data** | `lightkurve`, `astroquery`, MAST Archive, NASA Exoplanet Archive |
+| **Signal Processing** | `wotan`, `transitleastsquares`, `scipy` |
+| **Machine Learning** | `scikit-learn`, `xgboost`, `joblib` |
+| **Deep Learning (Planned)** | `PyTorch`, `transformers` |
+| **Backend API** | `FastAPI`, `uvicorn`, `pydantic` |
+| **Frontend** | `Next.js`, `React`, `TypeScript`, `Chart.js`, `Tailwind CSS` |
+| **Dashboard** | `Streamlit`, `matplotlib` |
+| **Language** | Python 3.12, TypeScript |
+
+---
+
+## 📄 License
+
+This project is for educational and research purposes.
+
+---
+
+*Built with a passion for discovering new worlds. 🌌*
