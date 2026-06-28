@@ -324,10 +324,13 @@ async def analyze_target(req: AnalysisRequest):
             "result_text": "Planet Candidate Detected" if prediction == 1 else "No Planet Transit Detected"
         })
 
-    # Physics-based vetting check for circular orbit maximum duration
+    # Physics-based vetting check for circular orbit maximum duration and stellar density
     r_star = getattr(tls_results, 'R_star', 1.0)
     m_star = getattr(tls_results, 'M_star', 1.0)
-    duration_ok, duration_ratio = check_transit_physics(period, duration, r_star, m_star)
+    duration_ok, duration_ratio, density_ratio, density_ok = check_transit_physics(period, duration, r_star, m_star)
+
+    # Physics-based vetting check for secondary eclipse at phase 0.5
+    has_secondary, secondary_depth, secondary_snr = check_secondary_eclipse(time_arr, flat_flux, period, duration, t0)
 
     # Prepare limited plot data (downsample for web transfer)
     downsample = max(1, len(time_arr) // 1000)
@@ -345,6 +348,11 @@ async def analyze_target(req: AnalysisRequest):
         "welch_p": welch_p,
         "duration_ok": duration_ok,
         "duration_ratio": duration_ratio,
+        "density_ok": density_ok,
+        "density_ratio": density_ratio,
+        "has_secondary": has_secondary,
+        "secondary_depth": secondary_depth,
+        "secondary_snr": secondary_snr,
         "stellar_r": float(r_star[0]) if isinstance(r_star, (list, np.ndarray)) else float(r_star),
         "stellar_m": float(m_star[0]) if isinstance(m_star, (list, np.ndarray)) else float(m_star),
         "plot_data": plot_data
