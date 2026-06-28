@@ -200,6 +200,23 @@ def to_scalar(value):
     val = float(value[0]) if isinstance(value, (list, np.ndarray)) and len(value) > 0 else float(value)
     return val if np.isfinite(val) else 0.0
 
+def check_transit_physics(period, duration_days, stellar_radius, stellar_mass):
+    if not stellar_radius or not stellar_mass or not period:
+        return True, 1.0
+    try:
+        r_star = float(stellar_radius[0]) if isinstance(stellar_radius, (list, np.ndarray)) else float(stellar_radius)
+        m_star = float(stellar_mass[0]) if isinstance(stellar_mass, (list, np.ndarray)) else float(stellar_mass)
+        # Calculate expected a/R* for circular orbit: 4.2649 * M^1/3 * P^2/3 / R
+        a_over_R = 4.2649 * (m_star**(1/3)) * (period**(2/3)) / r_star
+        # Max duration in days
+        max_duration = period / (np.pi * a_over_R)
+        duration_ratio = duration_days / max_duration
+        # If duration is more than 1.5 times the theoretical maximum circular duration, it is physically anomalous
+        is_physically_possible = duration_ratio <= 1.5
+        return bool(is_physically_possible), float(duration_ratio)
+    except:
+        return True, 1.0
+
 @app.post("/api/analyze")
 async def analyze_target(req: AnalysisRequest):
     if not models:
@@ -266,6 +283,11 @@ async def analyze_target(req: AnalysisRequest):
             "result_text": "Planet Candidate Detected" if prediction == 1 else "No Planet Transit Detected"
         })
 
+    # Physics-based vetting check for circular orbit maximum duration
+    r_star = getattr(tls_results, 'R_star', 1.0)
+    m_star = getattr(tls_results, 'M_star', 1.0)
+    duration_ok, duration_ratio = check_transit_physics(period, duration, r_star, m_star)
+
     # Prepare limited plot data (downsample for web transfer)
     downsample = max(1, len(time_arr) // 1000)
     plot_data = {
@@ -280,6 +302,10 @@ async def analyze_target(req: AnalysisRequest):
         "predictions": model_predictions,
         "features": dict(zip(feature_names, features)),
         "welch_p": welch_p,
+        "duration_ok": duration_ok,
+        "duration_ratio": duration_ratio,
+        "stellar_r": float(r_star[0]) if isinstance(r_star, (list, np.ndarray)) else float(r_star),
+        "stellar_m": float(m_star[0]) if isinstance(m_star, (list, np.ndarray)) else float(m_star),
         "plot_data": plot_data
     }
 
