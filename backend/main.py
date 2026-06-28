@@ -201,21 +201,62 @@ def to_scalar(value):
     return val if np.isfinite(val) else 0.0
 
 def check_transit_physics(period, duration_days, stellar_radius, stellar_mass):
-    if not stellar_radius or not stellar_mass or not period:
-        return True, 1.0
+    if not stellar_radius or not stellar_mass or not period or duration_days <= 0:
+        return True, 1.0, 1.0, True
     try:
         r_star = float(stellar_radius[0]) if isinstance(stellar_radius, (list, np.ndarray)) else float(stellar_radius)
         m_star = float(stellar_mass[0]) if isinstance(stellar_mass, (list, np.ndarray)) else float(stellar_mass)
-        # Calculate expected a/R* for circular orbit: 4.2649 * M^1/3 * P^2/3 / R
+        
+        # 1. Semi-major axis over stellar radius
         a_over_R = 4.2649 * (m_star**(1/3)) * (period**(2/3)) / r_star
-        # Max duration in days
+        
+        # 2. Maximum circular duration
         max_duration = period / (np.pi * a_over_R)
         duration_ratio = duration_days / max_duration
-        # If duration is more than 1.5 times the theoretical maximum circular duration, it is physically anomalous
-        is_physically_possible = duration_ratio <= 1.5
-        return bool(is_physically_possible), float(duration_ratio)
+        duration_ok = duration_ratio <= 1.5
+        
+        # 3. Density calculation: rho_transit = 1.41 * (a/R)^3 / P^2  (in g/cm^3)
+        # Estimated a/R from duration: a/R ~ P / (pi * duration)
+        est_a_over_R = period / (np.pi * duration_days)
+        rho_transit = 1.41 * (est_a_over_R**3) / (period**2)
+        
+        # Catalog density: rho_star = 1.41 * M_star / R_star^3 (in g/cm^3)
+        rho_star = 1.41 * m_star / (r_star**3)
+        
+        density_ratio = rho_transit / rho_star
+        # Vetting constraint: density ratio should be within [0.02, 50.0]
+        density_ok = 0.02 <= density_ratio <= 50.0
+        
+        return bool(duration_ok), float(duration_ratio), float(density_ratio), bool(density_ok)
     except:
-        return True, 1.0
+        return True, 1.0, 1.0, True
+
+def check_secondary_eclipse(time, flux, period, duration, t0):
+    t_secondary = t0 + 0.5 * period
+    phase = ((time - t_secondary) % period) / period
+    phase = np.where(phase > 0.5, phase - 1.0, phase)
+    
+    # Check within the transit duration
+    in_secondary = np.abs(phase) < (duration / period / 2)
+    out_secondary = ~in_secondary
+    
+    if np.sum(in_secondary) < 3 or np.sum(out_secondary) < 10:
+        return False, 0.0, 0.0
+    
+    secondary_flux = flux[in_secondary]
+    out_flux = flux[out_secondary]
+    
+    # Estimate depth at phase 0.5 relative to out-of-transit baseline
+    secondary_depth = 1.0 - np.nanmedian(secondary_flux)
+    noise_std = np.nanstd(out_flux)
+    
+    # S/N of secondary eclipse dip
+    se_snr = secondary_depth / (noise_std / np.sqrt(len(secondary_flux))) if noise_std > 1e-10 else 0.0
+    
+    # Secondary eclipse is classified if S/N exceeds 3.0 and depth is positive
+    has_secondary = se_snr >= 3.0 and secondary_depth > 0.0
+    return bool(has_secondary), float(secondary_depth), float(se_snr)
+
 
 @app.post("/api/analyze")
 async def analyze_target(req: AnalysisRequest):
