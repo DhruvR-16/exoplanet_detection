@@ -112,23 +112,37 @@ def calculate_shape_features(time, flux, period, duration, t0):
     in_transit = np.abs(phase) < (duration / period / 2)
     
     if np.sum(in_transit) < 5:
-        return 0, 0, 0
+        return 0.0, 0.0, 0.0
     
     transit_flux = flux[in_transit]
     transit_phase = phase[in_transit]
     
-    mid_idx = len(transit_flux) // 2
-    first_half = transit_flux[:mid_idx]
-    second_half = transit_flux[mid_idx:]
-    symmetry = np.std(first_half - second_half[::-1][:len(first_half)]) if len(first_half) > 0 else 0
+    # Sort by phase to order from ingress to egress
+    sort_idx = np.argsort(transit_phase)
+    sorted_flux = transit_flux[sort_idx]
+    sorted_phase = transit_phase[sort_idx]
     
-    sorted_indices = np.argsort(transit_flux)
-    ingress_points = np.sum(transit_phase < 0)
-    egress_points = np.sum(transit_phase > 0)
+    # Split ingress and egress based on phase sign (< 0 vs >= 0)
+    ingress_mask = sorted_phase < 0
+    egress_mask = sorted_phase >= 0
+    
+    ingress_flux = sorted_flux[ingress_mask]
+    egress_flux = sorted_flux[egress_mask]
+    
+    # Interpolate egress flux onto ingress phase grid for direct symmetry subtraction
+    if len(ingress_flux) > 2 and len(egress_flux) > 2:
+        egress_interp = np.interp(-sorted_phase[ingress_mask], sorted_phase[egress_mask], egress_flux)
+        symmetry = float(np.std(ingress_flux - egress_interp))
+    else:
+        symmetry = 0.0
+        
+    ingress_points = np.sum(ingress_mask)
+    egress_points = np.sum(egress_mask)
     shape_ratio = abs(ingress_points - egress_points) / max(ingress_points + egress_points, 1)
     
-    depth_std = np.std(transit_flux)
+    depth_std = float(np.std(transit_flux))
     return symmetry, shape_ratio, depth_std
+
 
 def odd_even_test(time, flux, period, duration, t0):
     phase = ((time - t0) % period) / period
