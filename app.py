@@ -220,6 +220,22 @@ def check_multi_sector(target):
     except:
         return 0
 
+def check_transit_physics(period, duration_days, stellar_radius, stellar_mass):
+    if not stellar_radius or not stellar_mass or not period:
+        return True, 1.0
+    try:
+        r_star = float(stellar_radius[0]) if isinstance(stellar_radius, (list, np.ndarray)) else float(stellar_radius)
+        m_star = float(stellar_mass[0]) if isinstance(stellar_mass, (list, np.ndarray)) else float(stellar_mass)
+        # Calculate expected a/R* for circular orbit
+        a_over_R = 4.2649 * (m_star**(1/3)) * (period**(2/3)) / r_star
+        # Max duration in days
+        max_duration = period / (np.pi * a_over_R)
+        duration_ratio = duration_days / max_duration
+        # Duration ratio > 1.5 is physically anomalous for a circular orbit
+        is_physically_possible = duration_ratio <= 1.5
+        return bool(is_physically_possible), float(duration_ratio)
+    except:
+        return True, 1.0
 
 # --- Main Application Logic ---
 if analyze_button and target_star:
@@ -279,6 +295,11 @@ if analyze_button and target_star:
     
     symmetry, shape_ratio, depth_std = calculate_shape_features(time_arr, flat_flux, period, duration, t0)
     depth_diff, duration_diff, mad_ratio, welch_p = odd_even_test(time_arr, flat_flux, period, duration, t0)
+    
+    r_star = getattr(tls_results, 'R_star', 1.0)
+    m_star = getattr(tls_results, 'M_star', 1.0)
+    duration_ok, duration_ratio = check_transit_physics(period, duration, r_star, m_star)
+
 
     
     raw_features = [
@@ -349,10 +370,18 @@ if analyze_button and target_star:
         """, unsafe_allow_html=True)
 
     # Physics-based Vetting diagnostics
-    if welch_p < 0.01:
-        st.warning(f"⚠️ **Eclipsing Binary Vetting Alert:** A significant depth difference was detected between odd and even transits (Welch's t-test p-value = {welch_p:.4e}). This indicates a high likelihood of a background eclipsing binary companion rather than a transiting planet.")
-    else:
-        st.success(f"✅ **Odd-Even Depth Consistency:** Odd and even transits have consistent depths (Welch's t-test p-value = {welch_p:.3f} > 0.01), supporting the planetary hypothesis.")
+    vet_col1, vet_col2 = st.columns(2)
+    with vet_col1:
+        if welch_p < 0.01:
+            st.warning(f"⚠️ **Odd-Even Depth Alert:** A significant depth difference was detected between odd and even transits (Welch's t-test p-value = {welch_p:.4e}). High likelihood of an eclipsing binary.")
+        else:
+            st.success(f"✅ **Odd-Even Depth Passed:** Odd and even transits have consistent depths (p-value = {welch_p:.3f} > 0.01).")
+            
+    with vet_col2:
+        if not duration_ok:
+            st.warning(f"⚠️ **Transit Physics Alert:** Observed duration is {duration_ratio:.2f}x the theoretical maximum circular duration. Physically anomalous for a standard planet.")
+        else:
+            st.success(f"✅ **Transit Physics Passed:** Observed duration is within limits ({duration_ratio:.2f}x of maximum circular limit).")
 
     st.markdown("---")
     st.subheader("Lightcurve Visualizations")
