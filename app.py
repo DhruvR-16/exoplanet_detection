@@ -338,7 +338,9 @@ if analyze_button and target_star:
     
     r_star = getattr(tls_results, 'R_star', 1.0)
     m_star = getattr(tls_results, 'M_star', 1.0)
-    duration_ok, duration_ratio = check_transit_physics(period, duration, r_star, m_star)
+    duration_ok, duration_ratio, density_ratio, density_ok = check_transit_physics(period, duration, r_star, m_star)
+    has_secondary, secondary_depth, secondary_snr = check_secondary_eclipse(time_arr, flat_flux, period, duration, t0)
+
 
 
     
