@@ -1,36 +1,29 @@
-.venv3.12/
+# Python
 __pycache__/
-.github/
+*.pyc
+.venv/
+.venv*/
+venv/
+.env
+.env.local
+.env.production
+.ipynb_checkpoints/
+
+# Data & caches (auto-downloaded, reproducible)
 data/
 lc_cache/
-visualization/
-plan.txt
+backend/lc_cache/
+pipeline_cache/
+predictions.csv
 
-# Node.js & Next.js (Frontend)
+# Node.js / Next.js
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 npm-debug.log*
 yarn-debug.log*
 
-# Python general & Backend
-venv/
-.venv/
-*.pyc
-backend/lc_cache/
-backend/__pycache__/
-
-# Environments
-.env
-.env.local
-.env.production
-
-# Jupyter Notebooks
-.ipynb_checkpoints/
-
-# OS Files
+# OS files
 .DS_Store
 Thumbs.db
 desktop.ini
-
-pipeline_cache/
