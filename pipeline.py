@@ -56,7 +56,14 @@ PERIOD_MIN_DAYS = 0.5
 PERIOD_MAX_DAYS = 15.0
 SDE_THRESHOLD = 7.0
 WELCH_P_THRESHOLD = 0.01
+# Effect-size guard: with 10^5 points the t-test flags negligible differences,
+# so an odd/even failure also requires a >=10% relative depth difference.
+OE_REL_DIFF_THRESHOLD = 0.10
 SECONDARY_SNR_THRESHOLD = 3.0
+# A stellar companion's secondary eclipse is deep relative to the primary;
+# a hot Jupiter's dayside emission is not (WASP-121 b: ~2% of primary).
+SECONDARY_REL_DEPTH_THRESHOLD = 0.15
+SECONDARY_MIN_DEPTH = 100e-6
 MAX_DURATION_RATIO = 1.5
 DENSITY_RATIO_BOUNDS = (0.1, 30.0)
 
@@ -67,6 +74,7 @@ DENSITY_RATIO_BOUNDS = (0.1, 30.0)
 A_OVER_R_COEFF = 4.2119
 RHO_COEFF = 0.018917
 RHO_SUN_CGS = 1.408
+R_JUP_R_SUN = 0.1028  # Jupiter equatorial radius in solar radii
 
 
 def to_scalar(value: Any, default: float = 0.0) -> float:
@@ -290,16 +298,43 @@ def run_tls(
         "show_progress_bar": False,
     }
     if stellar is not None:
-        kwargs["R_star"] = float(stellar.get("radius", 1.0))
-        kwargs["M_star"] = float(stellar.get("mass", 1.0))
+        r_star = float(stellar.get("radius", 1.0))
+        m_star = float(stellar.get("mass", 1.0))
+        # TLS's default priors reject stars outside ~0.1-1.0 M_sun, so always
+        # provide explicit bounds bracketing the catalog values.
+        kwargs.update(
+            R_star=r_star, R_star_min=max(0.05, r_star * 0.7), R_star_max=r_star * 1.3,
+            M_star=m_star, M_star_min=max(0.05, m_star * 0.7), M_star_max=m_star * 1.3,
+        )
     tls = transitleastsquares(time, flux)
     return tls.power(**kwargs)
+
+
+def transit_duration(tls_results: Any) -> float:
+    """Best-fit transit duration in days, measured from the TLS model curve.
+
+    TLS's `duration` attribute can disagree with its own fitted model by ~8x
+    on short-cadence lightcurves (observed on 20-s SPOC data), so the width of
+    the folded model dip is the trustworthy value.
+    """
+    period = to_scalar(tls_results.period)
+    try:
+        phase = np.asarray(tls_results.model_folded_phase, dtype=float)
+        model = np.asarray(tls_results.model_folded_model, dtype=float)
+        in_transit = model < 1.0 - 1e-9
+        if in_transit.sum() >= 2:
+            width = float(phase[in_transit].max() - phase[in_transit].min())
+            if 0.0 < width < 0.5:
+                return width * period
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return to_scalar(tls_results.duration)
 
 
 def extract_features(tls_results: Any) -> dict[str, float]:
     """Build the model feature vector (KOI-catalog units) from a TLS result."""
     period = to_scalar(tls_results.period)
-    duration_days = to_scalar(tls_results.duration)
+    duration_days = transit_duration(tls_results)
     # TLS reports depth as the flux level at mid-transit (~0.99); convert to a
     # fractional dip, then to ppm to match the Kepler catalog convention.
     depth_frac = max(0.0, 1.0 - to_scalar(tls_results.depth, default=1.0))
@@ -433,14 +468,27 @@ def check_transit_physics(
 
 
 def check_secondary_eclipse(
-    time: np.ndarray, flux: np.ndarray, period: float, duration: float, t0: float
+    time: np.ndarray,
+    flux: np.ndarray,
+    period: float,
+    duration: float,
+    t0: float,
+    primary_depth_frac: float = 0.0,
 ) -> dict[str, Any]:
-    """Search for a dip at phase 0.5; a significant one flags an eclipsing binary.
+    """Search for a dip at phase 0.5 and judge whether it is binary-like.
 
-    The noise baseline excludes both the primary transit and the secondary
-    window so the primary dip cannot inflate the noise estimate.
+    `secondary_detected` marks any significant dip; `has_secondary` (the
+    eclipsing-binary flag) additionally requires the dip to be deep relative
+    to the primary — a shallow secondary is consistent with planetary dayside
+    emission (ultra-hot Jupiters show exactly this), not a stellar companion.
+    The noise baseline excludes both the primary and secondary windows.
     """
-    result = {"has_secondary": False, "secondary_depth": 0.0, "secondary_snr": 0.0}
+    result = {
+        "has_secondary": False,
+        "secondary_detected": False,
+        "secondary_depth": 0.0,
+        "secondary_snr": 0.0,
+    }
     if period <= 0 or duration <= 0 or len(time) == 0:
         return result
 
@@ -458,8 +506,13 @@ def check_secondary_eclipse(
     if noise <= 1e-10:
         return result
     snr = secondary_depth / (noise / np.sqrt(in_secondary.sum()))
+    detected = bool(snr >= SECONDARY_SNR_THRESHOLD and secondary_depth > 0)
+    binary_like = detected and secondary_depth >= max(
+        SECONDARY_REL_DEPTH_THRESHOLD * primary_depth_frac, SECONDARY_MIN_DEPTH
+    )
     return {
-        "has_secondary": bool(snr >= SECONDARY_SNR_THRESHOLD and secondary_depth > 0),
+        "has_secondary": binary_like,
+        "secondary_detected": detected,
         "secondary_depth": float(secondary_depth),
         "secondary_snr": float(snr),
     }
@@ -503,6 +556,158 @@ def predict(model_pkg: dict[str, Any], features: dict[str, float]) -> dict[str, 
     }
 
 
+def build_explanation(result: dict[str, Any]) -> list[str]:
+    """Plain-English reasoning for a pipeline verdict, one statement per line.
+
+    Every statement is derived from the measured values in `result`, so the
+    text is a faithful account of why the verdict came out the way it did.
+    """
+    data, stellar = result["data"], result["stellar"]
+    feats, diag, vet = result["features"], result["diagnostics"], result["vetting"]
+    lines: list[str] = []
+
+    lines.append(
+        f"Data: {data['n_points']:,} cadences from {data['n_sectors']} TESS sector(s) "
+        f"(source: {data['source']})."
+    )
+    lines.append(
+        f"Host star: R = {stellar['radius']:.2f} R☉, M = {stellar['mass']:.2f} M☉ "
+        f"({stellar['source']})."
+    )
+    lines.append(
+        f"Best periodic signal: P = {feats['period_days']:.4f} d, depth = {feats['depth_ppm']:.0f} ppm, "
+        f"duration = {feats['duration_hrs']:.2f} h, Rp/Rs = {feats['rp_rs']:.4f}."
+    )
+
+    if diag["sde_pass"]:
+        lines.append(
+            f"Signal strength: SDE = {diag['sde']:.1f} ≥ {SDE_THRESHOLD:.0f} — the periodic "
+            "dip is statistically significant, not a noise fluctuation."
+        )
+    else:
+        lines.append(
+            f"Signal strength: SDE = {diag['sde']:.1f} < {SDE_THRESHOLD:.0f} — no statistically "
+            "significant transit signal exists in this lightcurve; the numbers below describe "
+            "the strongest noise pattern, not a real detection."
+        )
+
+    rp_rjup = feats["rp_rs"] * stellar["radius"] / R_JUP_R_SUN
+    if feats["rp_rs"] >= 0.2:
+        size_note = "far too large for a planet — consistent with a stellar companion"
+    elif feats["rp_rs"] >= 0.12:
+        size_note = "borderline — either a very large planet or a small stellar companion"
+    else:
+        size_note = "within the planetary regime"
+    lines.append(f"Implied companion radius: {rp_rjup:.2f} R_Jup ({size_note}).")
+
+    oe_rel = diag.get("odd_even_rel_diff", 0.0)
+    if vet["odd_even_ok"] and diag["welch_p"] >= WELCH_P_THRESHOLD:
+        lines.append(
+            f"Odd/even test: alternating transits have consistent depths "
+            f"(Welch p = {diag['welch_p']:.3f}) — no sign of an eclipsing binary at twice the period."
+        )
+    elif vet["odd_even_ok"]:
+        lines.append(
+            f"Odd/even test: a depth difference is statistically detectable (p = {diag['welch_p']:.2e}) "
+            f"but amounts to only {oe_rel:.1%} of the transit depth — negligible effect size, "
+            "consistent with residual systematics rather than an eclipsing binary."
+        )
+    else:
+        lines.append(
+            f"Odd/even test FAILED: alternating transits differ significantly "
+            f"(Welch p = {diag['welch_p']:.2e}, {oe_rel:.0%} of the transit depth) — "
+            "classic eclipsing-binary signature."
+        )
+
+    if vet["duration_ok"]:
+        lines.append(
+            f"Duration check: transit lasts {vet['duration_ratio']:.2f}× the circular-orbit "
+            "maximum — physically plausible."
+        )
+    else:
+        lines.append(
+            f"Duration check FAILED: transit lasts {vet['duration_ratio']:.2f}× the circular-orbit "
+            "maximum for this star — physically implausible for a planet."
+        )
+
+    if vet["density_ok"]:
+        lines.append(
+            f"Density check: transit-implied stellar density is {vet['density_ratio']:.2f}× the "
+            "catalog value — the eclipsed object is consistent with the target star."
+        )
+    else:
+        lines.append(
+            f"Density check FAILED: transit-implied density is {vet['density_ratio']:.2f}× the "
+            "catalog value — the dip likely comes from a blended or background star."
+        )
+
+    if vet["has_secondary"]:
+        lines.append(
+            f"Secondary eclipse DETECTED at phase 0.5 (depth = {vet['secondary_depth'] * 1e6:.0f} ppm, "
+            f"S/N = {vet['secondary_snr']:.1f}) — deep relative to the primary, indicating a "
+            "self-luminous stellar companion."
+        )
+    elif vet.get("secondary_detected"):
+        rel = vet["secondary_depth"] / max(feats["depth_ppm"] * 1e-6, 1e-9)
+        lines.append(
+            f"Secondary eclipse: a shallow dip exists at phase 0.5 "
+            f"({vet['secondary_depth'] * 1e6:.0f} ppm, only {rel:.1%} of the primary depth) — "
+            "consistent with planetary dayside emission, not a stellar companion."
+        )
+    else:
+        lines.append(
+            f"Secondary eclipse: none found at phase 0.5 (S/N = {vet['secondary_snr']:.1f} "
+            f"< {SECONDARY_SNR_THRESHOLD:.0f}) — no sign of a self-luminous companion."
+        )
+
+    pred = result.get("prediction")
+    if pred is not None:
+        lines.append(
+            f"ML classifier: calibrated ensemble (trained on 7,325 labeled Kepler objects) assigns "
+            f"a {pred['probability']:.1%} planet probability ({pred['confidence']} confidence)."
+        )
+
+    failed = [
+        name
+        for name, ok in [
+            ("signal significance", diag["sde_pass"]),
+            ("odd/even depth", vet["odd_even_ok"]),
+            ("transit duration", vet["duration_ok"]),
+            ("stellar density", vet["density_ok"]),
+            ("no secondary eclipse", not vet["has_secondary"]),
+        ]
+        if not ok
+    ]
+    if pred is None:
+        verdict = "Verdict: physics vetting only (no ML model loaded)"
+    elif not diag["sde_pass"]:
+        verdict = "VERDICT: NO DETECTION — no significant transit signal in this lightcurve."
+    elif pred["prediction"] == 1 and not failed:
+        verdict = (
+            f"VERDICT: PLANET CANDIDATE — all 5 physics checks pass and the ML probability "
+            f"is {pred['probability']:.1%}."
+        )
+    elif pred["prediction"] == 1 and failed:
+        verdict = (
+            f"VERDICT: DISPUTED — the ML favors a planet ({pred['probability']:.1%}) but "
+            f"physics vetting failed: {', '.join(failed)}. Treat as a likely false positive."
+        )
+    elif not failed:
+        verdict = (
+            f"VERDICT: AMBIGUOUS — the transit shape passes all 5 physics checks, but the ML "
+            f"assigns only {pred['probability']:.1%} because signals this deep and short-period "
+            "are statistically dominated by eclipsing binaries in the labeled training data. "
+            "Follow-up (e.g. radial velocities) would be needed to decide."
+        )
+    else:
+        verdict = (
+            f"VERDICT: LIKELY FALSE POSITIVE — ML planet probability is only "
+            f"{pred['probability']:.1%}, and physics vetting failed: {', '.join(failed)}."
+        )
+    lines.append(verdict)
+    return lines
+
+
 def analyze(
     target: str,
     model_pkg: dict[str, Any] | None = None,
@@ -519,15 +724,20 @@ def analyze(
     tls_results = run_tls(t_bin, f_bin, stellar=stellar)
 
     period = to_scalar(tls_results.period)
-    duration = to_scalar(tls_results.duration)
+    duration = transit_duration(tls_results)
     t0 = to_scalar(tls_results.T0)
     sde = to_scalar(tls_results.SDE)
 
     features = extract_features(tls_results)
+    depth_frac = features["depth_ppm"] * 1e-6
     symmetry, shape_ratio, depth_std = calculate_shape_features(time_arr, flat_flux, period, duration, t0)
     depth_diff, duration_diff, mad_ratio, welch_p = odd_even_test(time_arr, flat_flux, period, duration, t0)
     physics = check_transit_physics(period, duration, stellar["radius"], stellar["mass"])
-    secondary = check_secondary_eclipse(time_arr, flat_flux, period, duration, t0)
+    secondary = check_secondary_eclipse(
+        time_arr, flat_flux, period, duration, t0, primary_depth_frac=depth_frac
+    )
+    oe_rel_diff = depth_diff / depth_frac if depth_frac > 0 else 0.0
+    odd_even_ok = bool(welch_p >= WELCH_P_THRESHOLD or oe_rel_diff < OE_REL_DIFF_THRESHOLD)
 
     result: dict[str, Any] = {
         "target": target,
@@ -556,12 +766,14 @@ def analyze(
             "shape_ratio": shape_ratio,
             "depth_std": depth_std,
             "odd_even_depth_diff": depth_diff,
+            "odd_even_rel_diff": oe_rel_diff,
             "odd_even_duration_diff": duration_diff,
             "odd_even_mad_ratio": mad_ratio,
             "welch_p": welch_p,
         },
-        "vetting": {**physics, **secondary, "odd_even_ok": bool(welch_p >= WELCH_P_THRESHOLD)},
+        "vetting": {**physics, **secondary, "odd_even_ok": odd_even_ok},
     }
     if model_pkg is not None:
         result["prediction"] = predict(model_pkg, features)
+    result["explanation"] = build_explanation(result)
     return result

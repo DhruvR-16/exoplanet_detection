@@ -91,6 +91,7 @@ def analyze_target(req: AnalysisRequest) -> dict[str, Any]:
             }
         ],
         "features": result["features"],
+        "explanation": result["explanation"],
         "data_source": result["data"]["source"],
         "n_sectors": result["data"]["n_sectors"],
         "sde": diagnostics["sde"],

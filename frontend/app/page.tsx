@@ -36,6 +36,7 @@ type AnalysisResult = {
   target: string;
   predictions: Prediction[];
   features: Record<string, number>;
+  explanation?: string[];
   data_source?: string;
   n_sectors?: number;
   sde?: number;
@@ -414,6 +415,31 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+
+                {result.explanation && result.explanation.length > 0 && (
+                  <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-6 shadow-lg">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="h-4 w-1 bg-amber-500 rounded-full"></div>
+                      <h3 className="text-xl font-semibold text-slate-200">Verdict Reasoning</h3>
+                    </div>
+                    <ul className="space-y-2.5 text-sm text-slate-300 leading-relaxed">
+                      {result.explanation.map((line, i) => {
+                        const isVerdict = i === result.explanation!.length - 1
+                        return (
+                          <li
+                            key={i}
+                            className={isVerdict
+                              ? 'font-semibold text-white pt-3 mt-3 border-t border-slate-800'
+                              : 'flex gap-2'}
+                          >
+                            {!isVerdict && <span className="text-indigo-500 shrink-0">›</span>}
+                            {line}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  </div>
+                )}
 
                 {selectedModel && (
                   <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">

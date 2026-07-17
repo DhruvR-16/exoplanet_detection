@@ -113,17 +113,22 @@ if analyze_button and target_star:
 
     progress.progress(80, text="Extracting features and vetting...")
     period = pipeline.to_scalar(tls_results.period)
-    duration = pipeline.to_scalar(tls_results.duration)
+    duration = pipeline.transit_duration(tls_results)
     t0 = pipeline.to_scalar(tls_results.T0)
     sde = pipeline.to_scalar(tls_results.SDE)
 
     features = pipeline.extract_features(tls_results)
+    depth_frac = features["depth_ppm"] * 1e-6
     symmetry, shape_ratio, depth_std = pipeline.calculate_shape_features(
         time_arr, flat_flux, period, duration, t0
     )
-    _, _, _, welch_p = pipeline.odd_even_test(time_arr, flat_flux, period, duration, t0)
+    oe_depth_diff, _, _, welch_p = pipeline.odd_even_test(time_arr, flat_flux, period, duration, t0)
+    oe_rel_diff = oe_depth_diff / depth_frac if depth_frac > 0 else 0.0
+    odd_even_ok = welch_p >= pipeline.WELCH_P_THRESHOLD or oe_rel_diff < pipeline.OE_REL_DIFF_THRESHOLD
     physics = pipeline.check_transit_physics(period, duration, stellar["radius"], stellar["mass"])
-    secondary = pipeline.check_secondary_eclipse(time_arr, flat_flux, period, duration, t0)
+    secondary = pipeline.check_secondary_eclipse(
+        time_arr, flat_flux, period, duration, t0, primary_depth_frac=depth_frac
+    )
 
     progress.progress(95, text="Scoring with ML model...")
     pred = pipeline.predict(model_pkg, features)
@@ -174,13 +179,17 @@ if analyze_button and target_star:
                 "The periodic signal is not statistically significant."
             )
     with vet2:
-        if welch_p < pipeline.WELCH_P_THRESHOLD:
+        if not odd_even_ok:
             st.warning(
                 f"⚠️ **Odd-Even Depth Alert:** odd and even transits differ significantly "
-                f"(Welch's t-test p = {welch_p:.2e}). Classic eclipsing-binary signature."
+                f"(Welch p = {welch_p:.2e}, {oe_rel_diff:.0%} of transit depth). "
+                "Classic eclipsing-binary signature."
             )
         else:
-            st.success(f"✅ **Odd-Even Depth Passed:** consistent depths (p = {welch_p:.3f}).")
+            st.success(
+                f"✅ **Odd-Even Depth Passed:** consistent depths "
+                f"(p = {welch_p:.3f}, relative diff {oe_rel_diff:.1%})."
+            )
 
     vet3, vet4 = st.columns(2)
     with vet3:
@@ -212,6 +221,31 @@ if analyze_button and target_star:
                 f"✅ **Secondary Eclipse Passed:** no significant dip at phase 0.5 "
                 f"(S/N = {secondary['secondary_snr']:.1f} < {pipeline.SECONDARY_SNR_THRESHOLD:.0f})."
             )
+
+    # --- Verdict reasoning ---------------------------------------------------
+    explanation = pipeline.build_explanation(
+        {
+            "data": {"source": info["source"], "n_sectors": info["n_sectors"],
+                     "n_points": len(time_arr), "n_points_binned": len(t_bin)},
+            "stellar": stellar,
+            "features": features,
+            "diagnostics": {"sde": sde, "sde_pass": sde >= pipeline.SDE_THRESHOLD,
+                            "welch_p": welch_p, "odd_even_rel_diff": oe_rel_diff},
+            "vetting": {**physics, **secondary, "odd_even_ok": odd_even_ok},
+            "prediction": pred,
+        }
+    )
+    st.markdown("---")
+    st.subheader("Why This Verdict")
+    for line in explanation[:-1]:
+        st.markdown(f"- {line}")
+    verdict_line = explanation[-1]
+    if pred["prediction"] == 1:
+        st.success(f"**{verdict_line}**")
+    elif "AMBIGUOUS" in verdict_line:
+        st.warning(f"**{verdict_line}**")
+    else:
+        st.error(f"**{verdict_line}**")
 
     # --- Plots --------------------------------------------------------------
     st.markdown("---")

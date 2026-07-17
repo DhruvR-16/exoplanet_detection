@@ -28,6 +28,7 @@ Give it any TESS target (`TOI-270`, `TIC 307210830`, …) and the pipeline will:
 3. **Search** for periodic transits with **Transit Least Squares (TLS)**, using stellar radius/mass priors pulled live from the TIC catalog.
 4. **Vet** the signal with physics: signal detection efficiency, odd/even depth consistency (Welch's t-test), transit duration vs. the circular-orbit maximum, transit-implied stellar density vs. the catalog star, and a secondary-eclipse search at phase 0.5.
 5. **Classify** the candidate with a **calibrated RandomForest + XGBoost ensemble** trained on real NASA dispositions, returning a well-calibrated planet probability.
+6. **Explain** every verdict with a plain-English reasoning trail — data provenance, signal statistics, the outcome of each physics check, and the ML score — so you always know *why* a target was accepted or rejected.
 
 ## Model results
 
@@ -67,18 +68,29 @@ Real output for TOI-270 (M-dwarf multi-planet system), produced by [`main.ipynb`
 <img src="docs/img/pipeline_periodogram.png" alt="TLS periodogram with SDE ~ 40 peak at 5.66 days" width="850"/>
 
 ```text
-Star: R = 0.374 R_sun, M = 0.362 M_sun  (TIC catalog)
-Best period: 5.66038 d | duration: 1.29 h | SDE: 39.9
-
-Physics vetting:
-  Signal detection (SDE >= 7):    PASS  (SDE = 39.9)
-  Odd/even depth (Welch t-test):  PASS  (p = 0.415)
-  Duration vs circular maximum:   PASS  (0.76x)
-  Stellar density consistency:    PASS  (ratio = 2.29)
-  Secondary eclipse at phase 0.5: none  (S/N = -1.7)
-
-==> Planet Candidate Detected  (probability = 84.1%)
+Verdict reasoning:
+  - Host star: R = 0.37 R☉, M = 0.36 M☉ (TIC catalog).
+  - Best periodic signal: P = 5.6604 d, depth = 3732 ppm, duration = 1.42 h, Rp/Rs = 0.0549.
+  - Signal strength: SDE = 39.6 ≥ 7 — the periodic dip is statistically significant.
+  - Implied companion radius: 0.20 R_Jup (within the planetary regime).
+  - Odd/even test: alternating transits have consistent depths (Welch p = 0.212).
+  - Duration check: transit lasts 0.83× the circular-orbit maximum — physically plausible.
+  - Density check: transit-implied stellar density is 1.72× the catalog value — consistent.
+  - Secondary eclipse: none found at phase 0.5 (S/N = -1.9 < 3).
+  - ML classifier: calibrated ensemble assigns a 82.9% planet probability.
+  - VERDICT: PLANET CANDIDATE — all 5 physics checks pass and the ML probability is 82.9%.
 ```
+
+### Blind tests on targets the pipeline had never seen
+
+| Target | Ground truth | Pipeline result |
+| :--- | :--- | :--- |
+| π Mensae | π Men c: P = 6.2679 d, ~300 ppm super-Earth | Recovered at **P = 6.2670 d**, 232 ppm → planet candidate, **90.1%** |
+| Ross 176 | TOI-4491.01, confirmed planet, P = 5.006622 d | Recovered at **P = 5.0065 d** → planet candidate, 68.5% |
+| WASP-121 | Ultra-hot Jupiter, P = 1.27494 d | Recovered at **P = 1.2749 d**; all physics passes (its real ~360 ppm dayside emission is correctly attributed to the planet, not a stellar companion); verdict AMBIGUOUS — deep, short-period signals are statistically dominated by binaries in the training data, so the ML defers to follow-up |
+| TOI-270 | TOI-270 c: P = 5.66057 d | Recovered at **P = 5.6604 d** → planet candidate, 82.9% |
+
+*Fun fact: this repo previously listed Ross 176 as a "no known transits" control star — the rebuilt pipeline found its (real, since-confirmed) planet on the first run.*
 
 ## Architecture
 
@@ -118,10 +130,10 @@ Feature units are identical between the KOI training catalog and the TLS outputs
 | Check | Rejects |
 | :--- | :--- |
 | SDE ≥ 7 | Statistical noise |
-| Odd/even depth (Welch's t-test, p ≥ 0.01) | Eclipsing binaries detected at ½ their true period |
+| Odd/even depth (Welch's t-test **plus** a ≥10 % effect-size guard) | Eclipsing binaries detected at ½ their true period, without false-flagging negligible differences on 10⁵-point lightcurves |
 | Duration ≤ 1.5× circular-orbit maximum | Physically impossible transits |
 | Transit-implied stellar density within [0.1, 30]× catalog | Blended / background eclipsing binaries |
-| No secondary eclipse at phase 0.5 (S/N < 3) | Stellar companions with visible occultations |
+| No *binary-like* secondary eclipse (S/N ≥ 3 **and** depth ≥ 15 % of primary) | Stellar companions — while correctly tolerating genuine planetary dayside emission (e.g. WASP-121 b) |
 
 ## Quickstart
 
@@ -160,9 +172,10 @@ jupyter notebook main.ipynb
 | Target | What you should see |
 | :--- | :--- |
 | `TOI-270` | Planet candidate, P ≈ 5.66 d, all vetting checks pass |
+| `Pi Mensae` | Shallow 232 ppm super-Earth recovered at P ≈ 6.267 d |
 | `TIC 307210830` | L 98-59 — compact multi-planet system |
-| `TIC 38846515` | Known planet host |
-| `Ross 176` | No significant transit signal |
+| `Ross 176` | Finds TOI-4491.01, a confirmed planet at P ≈ 5.0066 d |
+| `WASP-121` | Hot Jupiter — physics passes, ML stays skeptical (AMBIGUOUS) |
 
 ## Project structure
 
@@ -189,8 +202,10 @@ expoplanet_detection/
 ## Honest limitations
 
 - The classifier is trained on **Kepler** statistics and applied to **TESS** TLS fits; the shared, unit-matched feature space makes this transfer reasonable, but it is still a domain shift.
+- **Deep, short-period signals (hot Jupiters) often land in the AMBIGUOUS verdict**: in the labeled training population such signals are mostly eclipsing binaries, so the ML is deliberately conservative there even when physics vetting passes — exactly the case that professionally requires radial-velocity follow-up.
 - A "planet candidate" verdict is a screening signal, not a discovery — real candidates require pixel-level vetting, follow-up photometry and radial velocities.
 - The TLS search is bounded to periods of 0.5–15 days (≥2 transits required in the observed baseline), so long-period planets are out of scope by design.
+- Only the strongest periodic signal per star is reported; additional planets in multi-planet systems would need iterative signal subtraction (not yet implemented).
 
 ## Acknowledgements
 
