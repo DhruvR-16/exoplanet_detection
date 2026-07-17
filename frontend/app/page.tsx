@@ -36,6 +36,10 @@ type AnalysisResult = {
   target: string;
   predictions: Prediction[];
   features: Record<string, number>;
+  data_source?: string;
+  n_sectors?: number;
+  sde?: number;
+  sde_pass?: boolean;
   welch_p?: number;
   duration_ok?: boolean;
   duration_ratio?: number;
@@ -54,6 +58,8 @@ type AnalysisResult = {
   };
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+
 export default function Home() {
   const [targetStar, setTargetStar] = useState('TOI-270')
   const [loading, setLoading] = useState(false)
@@ -71,7 +77,7 @@ export default function Home() {
     setSelectedModel(null)
 
     try {
-      const response = await axios.post<AnalysisResult>('http://localhost:8000/api/analyze', {
+      const response = await axios.post<AnalysisResult>(`${API_BASE}/api/analyze`, {
         target_star: targetStar
       })
       const data = response.data
@@ -93,33 +99,30 @@ export default function Home() {
 
   const loadDummyData = () => {
     const dummyResult = {
-      target: 'TOI-270 (Dummy Data)',
+      target: 'TOI-270 (Demo Data)',
       predictions: [
         {
-          model_name: 'Legacy Model (v1)',
-          prediction: 0,
-          probability: 0.23,
-          confidence: 'Medium',
-          result_text: 'No Planet Transit Detected'
-        },
-        {
-          model_name: 'Advanced Model (v2)',
+          model_name: 'Calibrated RF+XGBoost Ensemble (v3)',
           prediction: 1,
-          probability: 0.96,
+          probability: 0.84,
           confidence: 'High',
           result_text: 'Planet Candidate Detected'
         }
       ],
       features: {
-        'Period': 3.36,
-        'Duration': 0.12,
-        'Depth': 0.005,
-        'SNR': 12.5,
-        'SDE Pass': 1.0,
-        'Rp/Rs': 0.04,
-        'Odd-Even Mismatch': 0.01,
-        'Symmetry': 0.002
+        'period_days': 5.6604,
+        'depth_ppm': 3732.4,
+        'duration_hrs': 1.29,
+        'model_snr': 41.7,
+        'rp_rs': 0.0549,
+        'log10_depth': 3.572,
+        'log10_period': 0.753,
+        'duration_over_period': 0.0095
       },
+      data_source: 'SPOC',
+      n_sectors: 3,
+      sde: 39.9,
+      sde_pass: true,
       plot_data: {
         time: Array.from({length: 100}, (_, i) => i * 0.1),
         raw_flux: Array.from({length: 100}, () => 1 + (Math.random() * 0.02 - 0.01)),
@@ -178,7 +181,7 @@ export default function Home() {
                 disabled={loading}
                 className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 disabled:text-slate-600 text-slate-200 font-medium py-2 px-4 rounded-md border border-slate-700/50 transition-all mt-2"
               >
-                Load Dummy Results
+                Load Demo Results
               </button>
             </form>
           </div>
@@ -237,6 +240,13 @@ export default function Home() {
                   <div>
                     <p className="text-indigo-500 text-sm font-semibold uppercase tracking-wider mb-1">Target Acquired</p>
                     <h2 className="text-3xl font-bold text-white tracking-tight">{result.target}</h2>
+                    {result.data_source && (
+                      <p className="text-slate-500 text-sm mt-2">
+                        Source: {result.data_source} · {result.n_sectors} sector(s)
+                        {result.sde !== undefined && <> · SDE {result.sde.toFixed(1)}</>}
+                        {result.stellar_r !== undefined && <> · R★ {result.stellar_r.toFixed(2)} R☉ · M★ {result.stellar_m?.toFixed(2)} M☉</>}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -417,7 +427,7 @@ export default function Home() {
                         {Object.entries(result.features).slice(0, 8).map(([key, val], i) => (
                           <div key={i} className="bg-slate-900/80 p-5 rounded-xl border border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/50 transition-colors group">
                             <p className="text-xs text-slate-500 tracking-wider uppercase mb-2 group-hover:text-indigo-400 transition-colors">{key}</p>
-                            <p className="text-lg font-mono text-slate-200">{Number(val).toExponential(3)}</p>
+                            <p className="text-lg font-mono text-slate-200">{Number(val).toPrecision(4)}</p>
                           </div>
                         ))}
                       </div>
