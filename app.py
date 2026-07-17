@@ -1,25 +1,29 @@
-import streamlit as st
+"""Streamlit dashboard for the exoplanet transit-detection pipeline.
+
+All science lives in pipeline.py; this file is UI only.
+Run with: streamlit run app.py
+"""
+
+from __future__ import annotations
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import joblib
-import os
-import time
+import streamlit as st
 
-# --- Layout and Styling ---
+import pipeline
+
+# --- Page setup -------------------------------------------------------------
 st.set_page_config(
     page_title="Exoplanet Detection AI",
     page_icon="🪐",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Custom CSS for better aesthetics
-st.markdown("""
+st.markdown(
+    """
 <style>
-    .reportview-container {
-        background: #0e1117;
-    }
     .metric-card {
         background-color: #1e2532;
         padding: 15px;
@@ -27,492 +31,263 @@ st.markdown("""
         border-left: 5px solid #4B8BBE;
         margin-bottom: 20px;
     }
-    .metric-value {
-        font-size: 24px;
-        font-weight: bold;
-        color: #fff;
-    }
-    .metric-label {
-        font-size: 14px;
-        color: #a0aebc;
-    }
+    .metric-value { font-size: 24px; font-weight: bold; color: #fff; }
+    .metric-label { font-size: 14px; color: #a0aebc; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# Try to import necessary astrophysical libraries
-try:
-    import lightkurve as lk
-    from wotan import flatten
-    from transitleastsquares import transitleastsquares
-    from scipy.stats import median_abs_deviation
-    import torch
-except ImportError as e:
-    st.error(f"Missing required astrophysics libraries: {e}")
-    st.info("Please run: `pip install lightkurve wotan transitleastsquares torch xgboost scikit-learn pandas`")
-    st.stop()
+SURFACE = "#0e1117"
+ACCENT = "#4B8BBE"
 
 
-# --- Title & Sidebar ---
+def dark_fig(figsize: tuple[float, float]) -> tuple[plt.Figure, plt.Axes]:
+    fig, ax = plt.subplots(figsize=figsize, facecolor=SURFACE)
+    ax.set_facecolor(SURFACE)
+    ax.tick_params(colors="white")
+    ax.xaxis.label.set_color("white")
+    ax.yaxis.label.set_color("white")
+    ax.title.set_color("white")
+    return fig, ax
+
+
+# --- Sidebar ----------------------------------------------------------------
 st.title("🪐 Exoplanet Detection AI")
-st.markdown("Enter a star system's designation to fetch real TESS (Transiting Exoplanet Survey Satellite) data, extract features, and predict the likelihood of an exoplanet transit using a machine learning ensemble.")
+st.markdown(
+    "Enter a star designation to fetch real **TESS** data (SPOC lightcurves, with a "
+    "TESScut **Full Frame Image** fallback), search for transits with TLS, run "
+    "physics-based vetting, and score the candidate with a calibrated ML ensemble."
+)
 
 st.sidebar.header("Controls")
-st.sidebar.markdown("""
-### Example Targets:
-- **TOI-270** (Known planet host)
-- **TIC 38846515** (Known planet host)
-- **Ross 176** (No known transits)
-- **TIC 307210830** (Test case)
-""")
-
+st.sidebar.markdown(
+    """
+### Example Targets
+- **TOI-270** — known multi-planet system
+- **TIC 307210830** — L 98-59 system
+- **TIC 38846515** — known planet host
+- **Ross 176** — no known transits
+"""
+)
 target_star = st.sidebar.text_input("Enter Target Name", value="TOI-270")
+max_sectors = st.sidebar.slider("Max sectors to analyze", 1, 5, pipeline.DEFAULT_MAX_SECTORS)
 analyze_button = st.sidebar.button("Analyze System 🚀", type="primary")
 
 
-# --- Pipeline Functions ---
-CACHE_DIR = "lc_cache"
-os.makedirs(CACHE_DIR, exist_ok=True)
-
 @st.cache_resource
-def load_ml_model():
-    model_path_v2 = 'model/exoplanet_model_v2.pkl'
-    model_path_v1 = 'model/exoplanet_model_v1.pkl'
-    if os.path.exists(model_path_v2):
-        return joblib.load(model_path_v2), "v2"
-    elif os.path.exists(model_path_v1):
-        return joblib.load(model_path_v1), "v1"
-    return None, None
-
-def load_lightcurve(target):
-    safe_name = target.replace(" ", "_").replace("-", "_")
-    path = os.path.join(CACHE_DIR, safe_name + ".fits")
-
-    if os.path.exists(path):
-        try:
-            lc = lk.read(path)
-            return lc.remove_nans().remove_outliers().normalize()
-        except:
-            pass
-
-    search_results = None
-    try:
-        search_results = lk.search_lightcurve(target, mission='TESS', author='SPOC')
-        if len(search_results) == 0:
-            search_results = lk.search_lightcurve(target, mission='TESS')
-    except Exception as e:
-        return None, str(e)
-    
-    if search_results is None or len(search_results) == 0:
-        return None, f"No data found for {target} in TESS archive."
-    
-    for attempt in range(3):
-        try:
-            lc = search_results[0].download()
-            lc.to_fits(path, overwrite=True)
-            return lc.remove_nans().remove_outliers().normalize(), "Success"
-        except Exception as e:
-            if attempt == 2:
-                return None, f"Download attempts failed: {e}"
-            time.sleep(1)
-            
-    return None, "Download failed."
-
-def detrend(lc):
-    time = lc.time.value
-    flux = lc.flux.value
-    mask = np.isfinite(time) & np.isfinite(flux)
-    time = time[mask]
-    flux = flux[mask]
-    flat_flux, trend = flatten(time, flux, method='biweight', window_length=0.5, return_trend=True)
-    return time, flux, flat_flux, trend
-
-def detect_tls(time, flux):
-    tls_model = transitleastsquares(time, flux)
-    results = tls_model.power(oversampling_factor=2, duration_grid_step=1.05)
-    return results
-
-def calculate_shape_features(time, flux, period, duration, t0):
-    phase = ((time - t0) % period) / period
-    phase[phase > 0.5] -= 1.0 
-    in_transit = np.abs(phase) < (duration / period / 2)
-    
-    if np.sum(in_transit) < 5:
-        return 0.0, 0.0, 0.0
-    
-    transit_flux = flux[in_transit]
-    transit_phase = phase[in_transit]
-    
-    # Sort by phase to order from ingress to egress
-    sort_idx = np.argsort(transit_phase)
-    sorted_flux = transit_flux[sort_idx]
-    sorted_phase = transit_phase[sort_idx]
-    
-    # Split ingress and egress based on phase sign (< 0 vs >= 0)
-    ingress_mask = sorted_phase < 0
-    egress_mask = sorted_phase >= 0
-    
-    ingress_flux = sorted_flux[ingress_mask]
-    egress_flux = sorted_flux[egress_mask]
-    
-    # Interpolate egress flux onto ingress phase grid for direct symmetry subtraction
-    if len(ingress_flux) > 2 and len(egress_flux) > 2:
-        egress_interp = np.interp(-sorted_phase[ingress_mask], sorted_phase[egress_mask], egress_flux)
-        symmetry = float(np.std(ingress_flux - egress_interp))
-    else:
-        symmetry = 0.0
-        
-    ingress_points = np.sum(ingress_mask)
-    egress_points = np.sum(egress_mask)
-    shape_ratio = abs(ingress_points - egress_points) / max(ingress_points + egress_points, 1)
-    
-    depth_std = float(np.std(transit_flux))
-    return symmetry, shape_ratio, depth_std
+def load_model() -> tuple[dict | None, str | None]:
+    return pipeline.load_model()
 
 
-def odd_even_test(time, flux, period, duration, t0):
-    phase = ((time - t0) % period) / period
-    phase[phase > 0.5] -= 1.0
-    in_transit = np.abs(phase) < (duration / period / 2)
-    transit_number = np.floor((time - t0) / period)
-    
-    odd_mask = in_transit & (transit_number % 2 == 1)
-    even_mask = in_transit & (transit_number % 2 == 0)
-    
-    if np.sum(odd_mask) < 3 or np.sum(even_mask) < 3:
-        return 0.0, 0.0, 0.0, 1.0
-    
-    odd_flux = flux[odd_mask]
-    even_flux = flux[even_mask]
-    
-    odd_depth = 1 - np.median(odd_flux)
-    even_depth = 1 - np.median(even_flux)
-    depth_diff = abs(odd_depth - even_depth)
-    
-    odd_duration = np.sum(odd_mask) / len(time) * period
-    even_duration = np.sum(even_mask) / len(time) * period
-    duration_diff = abs(odd_duration - even_duration) / max(duration, 1e-10)
-    
-    mad_odd = median_abs_deviation(odd_flux)
-    mad_even = median_abs_deviation(even_flux)
-    
-    if mad_even > 1e-10 and mad_odd > 1e-10:
-        mad_ratio = mad_odd / mad_even
-        mad_ratio = np.clip(mad_ratio, 0.01, 100)
-        mad_ratio = abs(np.log(mad_ratio))
-    else:
-        mad_ratio = 0.0
-        
-    # Run Welch's t-test to check if odd/even transit depth distributions differ significantly
-    try:
-        from scipy import stats
-        t_stat, p_val = stats.ttest_ind(odd_flux, even_flux, equal_var=False)
-        welch_p = float(p_val) if np.isfinite(p_val) else 1.0
-    except:
-        welch_p = 1.0
-        
-    return depth_diff, duration_diff, mad_ratio, welch_p
+# --- Main flow --------------------------------------------------------------
+if analyze_button and not target_star:
+    st.warning("Please enter a target star name.")
 
-
-def check_multi_sector(target):
-    try:
-        search_results = lk.search_lightcurve(target, mission='TESS')
-        return len(search_results) if search_results is not None else 0
-    except:
-        return 0
-
-def check_transit_physics(period, duration_days, stellar_radius, stellar_mass):
-    if not stellar_radius or not stellar_mass or not period or duration_days <= 0:
-        return True, 1.0, 1.0, True
-    try:
-        r_star = float(stellar_radius[0]) if isinstance(stellar_radius, (list, np.ndarray)) else float(stellar_radius)
-        m_star = float(stellar_mass[0]) if isinstance(stellar_mass, (list, np.ndarray)) else float(stellar_mass)
-        
-        # 1. Semi-major axis over stellar radius
-        a_over_R = 4.2649 * (m_star**(1/3)) * (period**(2/3)) / r_star
-        
-        # 2. Maximum circular duration
-        max_duration = period / (np.pi * a_over_R)
-        duration_ratio = duration_days / max_duration
-        duration_ok = duration_ratio <= 1.5
-        
-        # 3. Density calculation: rho_transit = 1.41 * (a/R)^3 / P^2  (in g/cm^3)
-        est_a_over_R = period / (np.pi * duration_days)
-        rho_transit = 1.41 * (est_a_over_R**3) / (period**2)
-        
-        # Catalog density: rho_star = 1.41 * M_star / R_star^3 (in g/cm^3)
-        rho_star = 1.41 * m_star / (r_star**3)
-        
-        density_ratio = rho_transit / rho_star
-        # Vetting constraint: density ratio should be within [0.02, 50.0]
-        density_ok = 0.02 <= density_ratio <= 50.0
-        
-        return bool(duration_ok), float(duration_ratio), float(density_ratio), bool(density_ok)
-    except:
-        return True, 1.0, 1.0, True
-
-def check_secondary_eclipse(time, flux, period, duration, t0):
-    t_secondary = t0 + 0.5 * period
-    phase = ((time - t_secondary) % period) / period
-    phase = np.where(phase > 0.5, phase - 1.0, phase)
-    
-    # Check within the transit duration
-    in_secondary = np.abs(phase) < (duration / period / 2)
-    out_secondary = ~in_secondary
-    
-    if np.sum(in_secondary) < 3 or np.sum(out_secondary) < 10:
-        return False, 0.0, 0.0
-    
-    secondary_flux = flux[in_secondary]
-    out_flux = flux[out_secondary]
-    
-    # Estimate depth at phase 0.5 relative to out-of-transit baseline
-    secondary_depth = 1.0 - np.nanmedian(secondary_flux)
-    noise_std = np.nanstd(out_flux)
-    
-    # S/N of secondary eclipse dip
-    se_snr = secondary_depth / (noise_std / np.sqrt(len(secondary_flux))) if noise_std > 1e-10 else 0.0
-    
-    # Secondary eclipse is classified if S/N exceeds 3.0 and depth is positive
-    has_secondary = se_snr >= 3.0 and secondary_depth > 0.0
-    return bool(has_secondary), float(secondary_depth), float(se_snr)
-
-
-# --- Main Application Logic ---
 if analyze_button and target_star:
     st.markdown("---")
-    
-    # Check for model first
-    model_pkg, model_version = load_ml_model()
+
+    model_pkg, model_version = load_model()
     if model_pkg is None:
-        st.error("Model not found! Please ensure either `exoplanet_model_v2.pkl` or `exoplanet_model_v1.pkl` is inside the `model/` folder.")
+        st.error("Model not found. Run `python train_model.py` to create model/exoplanet_model_v3.pkl.")
         st.stop()
-        
-    if model_version == "v1":
-        st.warning("⚠️ Using legacy V1 model. Run all cells in `main.ipynb` to generate the improved V2 model with higher accuracy.")
-        
-    model = model_pkg['model']
-    feature_names = model_pkg['feature_names']
-    
-    progress_bar = st.progress(0, text="Fetching Lightcurve data...")
-    
-    # 1. Load Data
+
+    progress = st.progress(5, text="Fetching lightcurve data...")
     with st.spinner(f"Querying MAST archive for {target_star}..."):
-        lc, msg = load_lightcurve(target_star)
-        if lc is None:
-            st.error(f"Data Fetch Error: {msg}")
-            st.stop()
-            
-    progress_bar.progress(20, text="Detrending Lightcurve...")
-    
-    # 2. Detrend
-    with st.spinner("Removing stellar variability and detrending..."):
-        time_arr, raw_flux, flat_flux, trend = detrend(lc)
-        num_sectors = check_multi_sector(target_star)
-        
-    progress_bar.progress(40, text="Running Transit Least Squares (TLS)...")
-    
-    # 3. TLS
-    with st.spinner("Searching for periodic transit dips... This may take up to 30 seconds."):
-        tls_results = detect_tls(time_arr, flat_flux)
-        
-    progress_bar.progress(70, text="Extracting Physical and Statistical Features...")
-    
-    # 4. Feature Extraction
-    def to_scalar(value):
-        if value is None: return 0.0
-        val = float(value[0]) if isinstance(value, (list, np.ndarray)) and len(value) > 0 else float(value)
-        return val if np.isfinite(val) else 0.0
-        
-    period = to_scalar(tls_results.period)
-    duration = to_scalar(tls_results.duration)
-    depth = to_scalar(tls_results.depth)
-    snr = to_scalar(tls_results.SDE)
-    t0 = to_scalar(tls_results.T0)
-    sde_pass = 1 if snr >= 7.0 else 0
-    rp_rs = to_scalar(tls_results.rp_rs if hasattr(tls_results, 'rp_rs') else 0)
-    snr_pink = to_scalar(tls_results.snr_pink_per_transit if hasattr(tls_results, 'snr_pink_per_transit') else snr)
-    odd_even_mismatch = to_scalar(tls_results.odd_even_mismatch if hasattr(tls_results, 'odd_even_mismatch') else 0)
-    
-    symmetry, shape_ratio, depth_std = calculate_shape_features(time_arr, flat_flux, period, duration, t0)
-    depth_diff, duration_diff, mad_ratio, welch_p = odd_even_test(time_arr, flat_flux, period, duration, t0)
-    
-    r_star = getattr(tls_results, 'R_star', 1.0)
-    m_star = getattr(tls_results, 'M_star', 1.0)
-    duration_ok, duration_ratio, density_ratio, density_ok = check_transit_physics(period, duration, r_star, m_star)
-    has_secondary, secondary_depth, secondary_snr = check_secondary_eclipse(time_arr, flat_flux, period, duration, t0)
+        lc, info = pipeline.load_lightcurve(target_star, max_sectors=max_sectors)
+    if lc is None:
+        progress.empty()
+        st.error(f"Data fetch error: {info['message']}")
+        st.stop()
 
+    progress.progress(25, text="Looking up stellar parameters...")
+    stellar = pipeline.get_stellar_params(target_star, dict(lc.meta))
 
+    progress.progress(35, text="Detrending stellar variability...")
+    time_arr, raw_flux, flat_flux, trend = pipeline.detrend(lc)
+    t_bin, f_bin = pipeline.gap_aware_bin(time_arr, flat_flux)
 
-    
-    raw_features = [
-        period, depth, duration, snr, sde_pass, rp_rs, snr_pink, odd_even_mismatch,
-        to_scalar(symmetry), to_scalar(shape_ratio), to_scalar(depth_std),
-        to_scalar(depth_diff), to_scalar(duration_diff), to_scalar(mad_ratio),
-        num_sectors, len(time_arr)
-    ]
-    
-    features = [f if np.isfinite(f) else 0.0 for f in raw_features]
-    
-    progress_bar.progress(90, text="Evaluating Machine Learning Model...")
-    
-    # 5. ML Prediction
-    features_array = np.array(features).reshape(1, -1)
-    
-    if model_version == "v2":
-        scaler = model_pkg['scaler']
-        features_model = scaler.transform(features_array)
-    else:
-        features_model = features_array
-        
-    prediction = model.predict(features_model)[0]
-    probability = model.predict_proba(features_model)[0][1]
-    
-    result = "Planet Candidate Detected" if prediction == 1 else "No Planet Transit Detected"
-    
-    if probability > 0.85 or probability < 0.15:
-        confidence = "High"
-    elif probability > 0.70 or probability < 0.30:
-        confidence = "Medium"
-    else:
-        confidence = "Low"
-        
-    progress_bar.progress(100, text="Complete!")
-    time.sleep(0.5)
-    progress_bar.empty()
-    
-    # --- UI RESULTS DISPLAY ---
-    
+    progress.progress(50, text="Running Transit Least Squares (this can take ~1 min)...")
+    with st.spinner("Searching for periodic transit signals..."):
+        tls_results = pipeline.run_tls(t_bin, f_bin, stellar=stellar)
+
+    progress.progress(80, text="Extracting features and vetting...")
+    period = pipeline.to_scalar(tls_results.period)
+    duration = pipeline.to_scalar(tls_results.duration)
+    t0 = pipeline.to_scalar(tls_results.T0)
+    sde = pipeline.to_scalar(tls_results.SDE)
+
+    features = pipeline.extract_features(tls_results)
+    symmetry, shape_ratio, depth_std = pipeline.calculate_shape_features(
+        time_arr, flat_flux, period, duration, t0
+    )
+    _, _, _, welch_p = pipeline.odd_even_test(time_arr, flat_flux, period, duration, t0)
+    physics = pipeline.check_transit_physics(period, duration, stellar["radius"], stellar["mass"])
+    secondary = pipeline.check_secondary_eclipse(time_arr, flat_flux, period, duration, t0)
+
+    progress.progress(95, text="Scoring with ML model...")
+    pred = pipeline.predict(model_pkg, features)
+    progress.progress(100, text="Complete!")
+    progress.empty()
+
+    # --- Results ------------------------------------------------------------
     st.header("Prediction Results")
-    
-    # Hero metric
+    st.caption(
+        f"Data source: **{info['source']}** · {info['n_sectors']} sector(s) · "
+        f"{len(time_arr):,} points ({len(t_bin):,} after binning) · "
+        f"Stellar params: R={stellar['radius']:.2f} R☉, M={stellar['mass']:.2f} M☉ "
+        f"({stellar['source']}) · Model {model_version}"
+    )
+
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        st.markdown(f"""
-        <div class="metric-card" style="border-left-color: {'#4CAF50' if prediction == 1 else '#F44336'};">
+        color = "#4CAF50" if pred["prediction"] == 1 else "#F44336"
+        st.markdown(
+            f"""<div class="metric-card" style="border-left-color: {color};">
             <div class="metric-label">Model Classification</div>
-            <div class="metric-value">{result}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+            <div class="metric-value">{pred['result_text']}</div></div>""",
+            unsafe_allow_html=True,
+        )
     with col2:
-        st.markdown(f"""
-        <div class="metric-card" style="border-left-color: #FFC107;">
+        st.markdown(
+            f"""<div class="metric-card" style="border-left-color: #FFC107;">
             <div class="metric-label">Planet Probability</div>
-            <div class="metric-value">{probability:.2%}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
+            <div class="metric-value">{pred['probability']:.2%}</div></div>""",
+            unsafe_allow_html=True,
+        )
     with col3:
-        st.markdown(f"""
-        <div class="metric-card" style="border-left-color: #2196F3;">
+        st.markdown(
+            f"""<div class="metric-card" style="border-left-color: #2196F3;">
             <div class="metric-label">Model Confidence</div>
-            <div class="metric-value">{confidence}</div>
-        </div>
-        """, unsafe_allow_html=True)
+            <div class="metric-value">{pred['confidence']}</div></div>""",
+            unsafe_allow_html=True,
+        )
 
-    # Physics-based Vetting diagnostics
-    vet_col1, vet_col2 = st.columns(2)
-    with vet_col1:
-        if welch_p < 0.01:
-            st.warning(f"⚠️ **Odd-Even Depth Alert:** A significant depth difference was detected between odd and even transits (Welch's t-test p-value = {welch_p:.4e}). High likelihood of an eclipsing binary.")
+    # --- Physics vetting ----------------------------------------------------
+    vet1, vet2 = st.columns(2)
+    with vet1:
+        if sde >= pipeline.SDE_THRESHOLD:
+            st.success(f"✅ **Signal Detection Passed:** SDE = {sde:.1f} ≥ {pipeline.SDE_THRESHOLD:.0f}.")
         else:
-            st.success(f"✅ **Odd-Even Depth Passed:** Odd and even transits have consistent depths (p-value = {welch_p:.3f} > 0.01).")
-            
-    with vet_col2:
-        if not duration_ok:
-            st.warning(f"⚠️ **Transit Physics Alert:** Observed duration is {duration_ratio:.2f}x the theoretical maximum circular duration. Physically anomalous for a standard planet.")
+            st.warning(
+                f"⚠️ **Weak Signal:** SDE = {sde:.1f} < {pipeline.SDE_THRESHOLD:.0f}. "
+                "The periodic signal is not statistically significant."
+            )
+    with vet2:
+        if welch_p < pipeline.WELCH_P_THRESHOLD:
+            st.warning(
+                f"⚠️ **Odd-Even Depth Alert:** odd and even transits differ significantly "
+                f"(Welch's t-test p = {welch_p:.2e}). Classic eclipsing-binary signature."
+            )
         else:
-            st.success(f"✅ **Transit Physics Passed:** Observed duration is within limits ({duration_ratio:.2f}x of maximum circular limit).")
+            st.success(f"✅ **Odd-Even Depth Passed:** consistent depths (p = {welch_p:.3f}).")
 
-    vet_col3, vet_col4 = st.columns(2)
-    with vet_col3:
-        if not density_ok:
-            st.warning(f"⚠️ **Stellar Density Alert:** Transit-implied density is {density_ratio:.3f}x the catalog stellar density. Physically anomalous mismatch.")
+    vet3, vet4 = st.columns(2)
+    with vet3:
+        if not physics["duration_ok"]:
+            st.warning(
+                f"⚠️ **Transit Physics Alert:** duration is {physics['duration_ratio']:.2f}× the "
+                "maximum circular-orbit duration — physically anomalous."
+            )
+        elif not physics["density_ok"]:
+            st.warning(
+                f"⚠️ **Stellar Density Alert:** transit-implied density is "
+                f"{physics['density_ratio']:.2f}× the catalog stellar density — likely a blend "
+                "or eclipsing binary."
+            )
         else:
-            st.success(f"✅ **Stellar Density Passed:** Density ratio is consistent ({density_ratio:.2f}x of catalog stellar density).")
-            
-    with vet_col4:
-        if has_secondary:
-            st.warning(f"⚠️ **Secondary Eclipse Alert:** Detected secondary eclipse at phase 0.5 (Depth = {secondary_depth:.4f}, SNR = {secondary_snr:.1f}). Likely a stellar companion binary.")
+            st.success(
+                f"✅ **Transit Physics Passed:** duration {physics['duration_ratio']:.2f}× of circular "
+                f"limit; density ratio {physics['density_ratio']:.2f}."
+            )
+    with vet4:
+        if secondary["has_secondary"]:
+            st.warning(
+                f"⚠️ **Secondary Eclipse Alert:** dip at phase 0.5 "
+                f"(depth = {secondary['secondary_depth']:.5f}, S/N = {secondary['secondary_snr']:.1f}). "
+                "Likely a stellar companion."
+            )
         else:
-            st.success(f"✅ **Secondary Eclipse Passed:** No secondary eclipse detected at phase 0.5 (SNR = {secondary_snr:.1f} < 3.0).")
+            st.success(
+                f"✅ **Secondary Eclipse Passed:** no significant dip at phase 0.5 "
+                f"(S/N = {secondary['secondary_snr']:.1f} < {pipeline.SECONDARY_SNR_THRESHOLD:.0f})."
+            )
 
+    # --- Plots --------------------------------------------------------------
     st.markdown("---")
     st.subheader("Lightcurve Visualizations")
-    
-    tab1, tab2, tab3 = st.tabs(["Raw & Detrended Flux", "Phase Folded Transit", "TLS Periodogram"])
-    
-    # Colors suitable for dark mode
-    line_col = '#4B8BBE'
-    transit_col = 'red'
-    
+    tab1, tab2, tab3 = st.tabs(["Raw & Detrended Flux", "Phase-Folded Transit", "TLS Periodogram"])
+
     with tab1:
-        fig1, ax1 = plt.subplots(figsize=(12, 4), facecolor='#0e1117')
-        ax1.set_facecolor('#0e1117')
-        ax1.plot(time_arr, raw_flux, '.', color='gray', alpha=0.3, label='Raw Flux')
-        ax1.plot(time_arr, trend, '-', color='red', alpha=0.8, linewidth=1, label='Trend')
-        ax1.plot(time_arr, flat_flux - 0.02, '.', color=line_col, alpha=0.5, label='Detrended (-0.02 offset)')
-        ax1.set_xlabel('Time (Days)', color='white')
-        ax1.set_ylabel('Normalized Flux', color='white')
-        ax1.tick_params(colors='white')
-        ax1.legend(loc='upper right', facecolor='#1e2532', labelcolor='white')
+        fig1, ax1 = dark_fig((12, 4))
+        ax1.plot(time_arr, raw_flux, ".", color="gray", alpha=0.3, markersize=2, label="Raw flux")
+        ax1.plot(time_arr, trend, "-", color="red", alpha=0.8, linewidth=1, label="Trend")
+        ax1.plot(time_arr, flat_flux - 0.02, ".", color=ACCENT, alpha=0.4, markersize=2,
+                 label="Detrended (−0.02 offset)")
+        ax1.set_xlabel("Time (BTJD days)")
+        ax1.set_ylabel("Normalized flux")
+        ax1.legend(loc="upper right", facecolor="#1e2532", labelcolor="white")
         st.pyplot(fig1)
-        
+
     with tab2:
-        if hasattr(tls_results, 'folded_phase'):
-            fig2, ax2 = plt.subplots(figsize=(10, 5), facecolor='#0e1117')
-            ax2.set_facecolor('#0e1117')
-            
-            phase = tls_results.folded_phase
-            flux_folded = tls_results.folded_y
-            
-            # Plot binned or raw
-            ax2.plot(phase, flux_folded, '.', color='gray', alpha=0.3, zorder=1)
-            
-            # Overlay TLS model fit
-            if hasattr(tls_results, 'model_folded_phase'):
-                ax2.plot(tls_results.model_folded_phase, tls_results.model_folded_model, color=transit_col, linewidth=2, zorder=2)
-                
-            ax2.set_xlim([0.45, 0.55])  # Zoom in on transit
-            ax2.set_xlabel('Phase', color='white')
-            ax2.set_ylabel('Relative Flux', color='white')
-            ax2.set_title(f'Phase Folded (Period: {period:.2f} Days)', color='white')
-            ax2.tick_params(colors='white')
+        if hasattr(tls_results, "folded_phase") and period > 0:
+            fig2, ax2 = dark_fig((10, 5))
+            ax2.plot(tls_results.folded_phase, tls_results.folded_y, ".", color="gray",
+                     alpha=0.3, markersize=2, zorder=1)
+            if hasattr(tls_results, "model_folded_phase"):
+                ax2.plot(tls_results.model_folded_phase, tls_results.model_folded_model,
+                         color="red", linewidth=2, zorder=2, label="TLS model")
+                ax2.legend(loc="lower right", facecolor="#1e2532", labelcolor="white")
+            window = max(2.5 * duration / period, 0.02)
+            ax2.set_xlim(0.5 - window, 0.5 + window)
+            ax2.set_xlabel("Orbital phase")
+            ax2.set_ylabel("Relative flux")
+            ax2.set_title(f"Phase-folded at P = {period:.4f} d")
             st.pyplot(fig2)
         else:
             st.info("No valid transit signal to fold.")
-            
+
     with tab3:
-        if hasattr(tls_results, 'periods'):
-            fig3, ax3 = plt.subplots(figsize=(10, 4), facecolor='#0e1117')
-            ax3.set_facecolor('#0e1117')
-            ax3.plot(tls_results.periods, tls_results.power, color=line_col)
+        if hasattr(tls_results, "periods"):
+            fig3, ax3 = dark_fig((10, 4))
+            ax3.plot(tls_results.periods, tls_results.power, color=ACCENT, linewidth=0.8)
             if period > 0:
-                ax3.axvline(period, color='red', linestyle='--', alpha=0.8)
-            ax3.set_xlabel('Trial Period (Days)', color='white')
-            ax3.set_ylabel('SDE (Signal Detection Efficiency)', color='white')
-            ax3.tick_params(colors='white')
+                ax3.axvline(period, color="red", linestyle="--", alpha=0.8)
+            ax3.axhline(pipeline.SDE_THRESHOLD, color="orange", linestyle=":", alpha=0.6)
+            ax3.set_xlabel("Trial period (days)")
+            ax3.set_ylabel("SDE")
             st.pyplot(fig3)
         else:
             st.info("Periodogram unavailable.")
 
-            
+    # --- Feature tables -----------------------------------------------------
     st.markdown("---")
-    st.subheader("Physical & Analytical Features")
-    
-    f_df = pd.DataFrame({
-        "Feature Name": feature_names,
-        "Extracted Value": features
-    })
-    
+    st.subheader("Model Features & Diagnostics")
+
     col_f1, col_f2 = st.columns(2)
     with col_f1:
-        st.dataframe(f_df.iloc[:8], use_container_width=True, hide_index=True)
+        st.dataframe(
+            pd.DataFrame(
+                {"Feature": list(features.keys()),
+                 "Value": [f"{v:.5g}" for v in features.values()]}
+            ),
+            use_container_width=True, hide_index=True,
+        )
     with col_f2:
-        st.dataframe(f_df.iloc[8:], use_container_width=True, hide_index=True)
-        
-    
-elif analyze_button and not target_star:
-    st.warning("Please enter a target star name.")
-
+        diagnostics = {
+            "SDE": sde,
+            "T0 (BTJD)": t0,
+            "Transit symmetry (ingress/egress)": symmetry,
+            "Shape ratio": shape_ratio,
+            "In-transit scatter": depth_std,
+            "Odd-even Welch p-value": welch_p,
+            "Secondary eclipse S/N": secondary["secondary_snr"],
+            "Density ratio (transit/catalog)": physics["density_ratio"],
+        }
+        st.dataframe(
+            pd.DataFrame(
+                {"Diagnostic": list(diagnostics.keys()),
+                 "Value": [f"{v:.5g}" for v in diagnostics.values()]}
+            ),
+            use_container_width=True, hide_index=True,
+        )
