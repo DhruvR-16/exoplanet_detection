@@ -1,0 +1,21 @@
+{
+  "n_samples": 7325,
+  "n_train": 4688,
+  "n_calibration": 1172,
+  "n_test": 1465,
+  "class_balance": {
+    "confirmed": 2745,
+    "false_positive": 4580
+  },
+  "accuracy": 0.8976,
+  "precision": 0.8319,
+  "recall": 0.9107,
+  "f1": 0.8696,
+  "roc_auc": 0.9569,
+  "pr_auc": 0.9165,
+  "brier": 0.0796,
+  "cv_roc_auc_mean": 0.9639,
+  "cv_roc_auc_std": 0.0056,
+  "trained_at": "2026-07-17 14:33 UTC",
+  "training_data": "NASA Exoplanet Archive KOI cumulative catalog"
+}

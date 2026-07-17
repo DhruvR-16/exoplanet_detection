@@ -1,211 +1,360 @@
+"""Train the exoplanet candidate classifier (model v3).
+
+Data: NASA Exoplanet Archive KOI cumulative catalog (downloaded via the TAP
+API and cached under data/). Labels are real dispositions - CONFIRMED planets
+are positives, FALSE POSITIVEs are negatives, CANDIDATEs are excluded.
+
+Model: soft-voting ensemble (RandomForest + XGBoost) with Platt-scaled
+probability calibration on a held-out calibration split. Features use the
+same units the TLS pipeline produces at inference time (see pipeline.py).
+
+Outputs:
+    model/exoplanet_model_v3.pkl   - model package (model, scaler, feature names)
+    docs/metrics.json              - held-out test metrics
+    docs/img/*.png                 - training result figures for the README
+
+Usage:
+    python train_model.py [--refresh-data]
 """
-Quick model training script using the Kepler DR25 TCE catalog and NASA Exoplanet Archive.
-Produces model/exoplanet_model_v2.pkl with a calibrated RF + XGBoost ensemble.
-"""
-import pandas as pd
-import numpy as np
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import quote
+
 import joblib
-import warnings
-warnings.filterwarnings("ignore")
+import matplotlib
 
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import requests
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, roc_auc_score
-from xgboost import XGBClassifier
-import os
-
-# Feature names used throughout the pipeline
-FEATURE_NAMES = [
-    'Period', 'Depth', 'Duration', 'SNR', 'SDE_Pass', 'Rp/Rs',
-    'SNR_Pink', 'Odd_Even_Mismatch', 'Symmetry', 'Shape_Ratio',
-    'Depth_Std', 'Depth_Diff', 'Duration_Diff', 'MAD_Ratio',
-    'Num_Sectors', 'Num_Points'
-]
-
-print("Loading Kepler DR25 TCE catalog...")
-try:
-    tce = pd.read_csv("data/q1_q17_dr25_tce_2026.01.27_07.29.56.csv")
-    print(f"Loaded TCE catalog: {len(tce)} rows, columns: {list(tce.columns[:20])}")
-except Exception as e:
-    print(f"Error loading TCE: {e}")
-    tce = None
-
-print("\nLoading NASA Exoplanet Archive (confirmed planets)...")
-try:
-    ps = pd.read_csv("data/PS_2026.02.02_22.30.54.csv")
-    print(f"Loaded PS catalog: {len(ps)} rows")
-except Exception as e:
-    print(f"Error loading PS: {e}")
-    ps = None
-
-# ── Build training data from Kepler DR25 TCE ──────────────────────────────────
-if tce is not None:
-    print("\nBuilding training features from Kepler DR25 TCE catalog...")
-    print("Available columns:", list(tce.columns[:40]))
-    
-    # Map Kepler DR25 columns to our feature space
-    col_map = {}
-    cols = tce.columns.tolist()
-    
-    for c in cols:
-        c_lo = c.lower()
-        if 'period' in c_lo and 'err' not in c_lo: col_map['Period'] = c
-        if 'depth' in c_lo and 'err' not in c_lo and 'second' not in c_lo and 'centroid' not in c_lo: col_map.setdefault('Depth', c)
-        if 'duration' in c_lo and 'err' not in c_lo: col_map.setdefault('Duration', c)
-        if 'snr' in c_lo and 'err' not in c_lo: col_map.setdefault('SNR', c)
-        if 'ratio' in c_lo and 'rp' in c_lo: col_map.setdefault('Rp/Rs', c)
-    
-    print("\nColumn mapping found:", col_map)
-    
-    rows = []
-    for _, row in tce.iterrows():
-        try:
-            period = float(row.get(col_map.get('Period', 'tce_period'), 1.0))
-            depth = float(row.get(col_map.get('Depth', 'tce_depth'), 0.01))
-            duration = float(row.get(col_map.get('Duration', 'tce_duration'), 0.1))
-            snr = float(row.get(col_map.get('SNR', 'tce_model_snr'), 10.0))
-            rp_rs = float(row.get(col_map.get('Rp/Rs', 'tce_ror'), 0.05))
-            
-            # Get disposition label from av_training_set column
-            disp = str(row.get('av_training_set', 'UNK')).strip().upper()
-            if disp in ['PC', 'AFP']:
-                label = 1
-            elif disp in ['FP', 'NTP', 'INV']:
-                label = 0
-            else:
-                # Use SNR heuristic as fallback when disposition is unknown
-                label = 1 if snr >= 10 and rp_rs < 0.15 else 0
-            
-            # Check columns exist and extract
-            if not all(np.isfinite([period, depth, duration, snr, rp_rs])):
-                continue
-                
-            sde_pass = 1 if snr >= 7.0 else 0
-            snr_pink = snr * 0.85 + np.random.normal(0, 0.5)
-            odd_even_mismatch = abs(np.random.normal(0, 0.02))
-            symmetry = abs(np.random.normal(0, 0.001))
-            shape_ratio = abs(np.random.normal(0.1, 0.05))
-            depth_std = depth * 0.05
-            depth_diff = abs(np.random.normal(0, depth * 0.1))
-            duration_diff = abs(np.random.normal(0.1, 0.05))
-            mad_ratio = abs(np.random.normal(0, 0.1))
-            num_sectors = 2
-            num_points = 2000
-
-            rows.append([period, depth, duration, snr, sde_pass, rp_rs, snr_pink,
-                         odd_even_mismatch, symmetry, shape_ratio, depth_std,
-                         depth_diff, duration_diff, mad_ratio, num_sectors, num_points, label])
-        except Exception:
-            continue
-    
-    df = pd.DataFrame(rows, columns=FEATURE_NAMES + ['Label'])
-    print(f"\nBuilt {len(df)} training samples: {df['Label'].value_counts().to_dict()}")
-else:
-    # Fallback: generate synthetic training data
-    print("\nNo TCE data found, generating synthetic training data...")
-    np.random.seed(42)
-    n = 5000
-    # Planet candidates (label=1): short period, high SNR, small Rp/Rs
-    n_pos = n // 2
-    pos = pd.DataFrame({
-        'Period': np.random.uniform(0.5, 15, n_pos),
-        'Depth': np.random.uniform(0.001, 0.05, n_pos),
-        'Duration': np.random.uniform(0.05, 0.5, n_pos),
-        'SNR': np.random.uniform(7, 50, n_pos),
-        'SDE_Pass': 1,
-        'Rp/Rs': np.random.uniform(0.01, 0.1, n_pos),
-        'SNR_Pink': np.random.uniform(6, 45, n_pos),
-        'Odd_Even_Mismatch': np.abs(np.random.normal(0, 0.01, n_pos)),
-        'Symmetry': np.abs(np.random.normal(0, 0.001, n_pos)),
-        'Shape_Ratio': np.abs(np.random.normal(0.05, 0.03, n_pos)),
-        'Depth_Std': np.random.uniform(0.0001, 0.003, n_pos),
-        'Depth_Diff': np.abs(np.random.normal(0, 0.001, n_pos)),
-        'Duration_Diff': np.abs(np.random.normal(0.05, 0.03, n_pos)),
-        'MAD_Ratio': np.abs(np.random.normal(0.05, 0.05, n_pos)),
-        'Num_Sectors': np.random.randint(1, 5, n_pos),
-        'Num_Points': np.random.randint(500, 5000, n_pos),
-        'Label': 1
-    })
-    # False positives (label=0): inconsistent depth, high odd-even mismatch
-    n_neg = n - n_pos
-    neg = pd.DataFrame({
-        'Period': np.random.uniform(0.5, 15, n_neg),
-        'Depth': np.random.uniform(0.001, 0.1, n_neg),
-        'Duration': np.random.uniform(0.05, 1.0, n_neg),
-        'SNR': np.random.uniform(5, 30, n_neg),
-        'SDE_Pass': np.random.choice([0, 1], n_neg),
-        'Rp/Rs': np.random.uniform(0.1, 0.3, n_neg),
-        'SNR_Pink': np.random.uniform(4, 25, n_neg),
-        'Odd_Even_Mismatch': np.abs(np.random.normal(0.05, 0.05, n_neg)),
-        'Symmetry': np.abs(np.random.normal(0.01, 0.01, n_neg)),
-        'Shape_Ratio': np.abs(np.random.normal(0.3, 0.2, n_neg)),
-        'Depth_Std': np.random.uniform(0.003, 0.02, n_neg),
-        'Depth_Diff': np.abs(np.random.normal(0.01, 0.01, n_neg)),
-        'Duration_Diff': np.abs(np.random.normal(0.4, 0.3, n_neg)),
-        'MAD_Ratio': np.abs(np.random.normal(0.3, 0.3, n_neg)),
-        'Num_Sectors': np.random.randint(1, 5, n_neg),
-        'Num_Points': np.random.randint(500, 5000, n_neg),
-        'Label': 0
-    })
-    df = pd.concat([pos, neg], ignore_index=True).sample(frac=1, random_state=42)
-    print(f"Generated {len(df)} synthetic samples: {df['Label'].value_counts().to_dict()}")
-
-# ── Clean and split ────────────────────────────────────────────────────────────
-df = df.replace([np.inf, -np.inf], np.nan).dropna()
-df = df[(df[FEATURE_NAMES] < 1e6).all(axis=1)]
-print(f"\nAfter cleaning: {len(df)} samples, label distribution: {df['Label'].value_counts().to_dict()}")
-
-X = df[FEATURE_NAMES].values
-y = df['Label'].values
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-
-# ── Scale ──────────────────────────────────────────────────────────────────────
-scaler = StandardScaler()
-X_train_s = scaler.fit_transform(X_train)
-X_test_s = scaler.transform(X_test)
-
-# ── Train models ───────────────────────────────────────────────────────────────
-print("\nTraining Random Forest...")
-rf = RandomForestClassifier(n_estimators=300, max_depth=12, min_samples_leaf=3,
-                            class_weight='balanced', random_state=42, n_jobs=-1)
-rf.fit(X_train_s, y_train)
-
-print("Training XGBoost...")
-xgb = XGBClassifier(n_estimators=300, max_depth=6, learning_rate=0.05,
-                    subsample=0.8, colsample_bytree=0.8, use_label_encoder=False,
-                    eval_metric='logloss', random_state=42, scale_pos_weight=(y_train==0).sum()/(y_train==1).sum())
-xgb.fit(X_train_s, y_train)
-
-print("Building calibrated voting ensemble...")
-ensemble = VotingClassifier(
-    estimators=[('rf', rf), ('xgb', xgb)],
-    voting='soft', weights=[1, 1]
+from sklearn.frozen import FrozenEstimator
+from sklearn.inspection import permutation_importance
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    accuracy_score,
+    average_precision_score,
+    brier_score_loss,
+    classification_report,
+    confusion_matrix,
+    f1_score,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+    roc_curve,
 )
-ensemble.fit(X_train_s, y_train)
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from xgboost import XGBClassifier
 
-# Calibrate using cross-validation on the training set
-calibrated = CalibratedClassifierCV(ensemble, method='isotonic', cv=5)
-calibrated.fit(X_train_s, y_train)
+from pipeline import FEATURE_NAMES
 
-# ── Evaluate ───────────────────────────────────────────────────────────────────
-print("\n── Evaluation Results ──")
-y_pred = calibrated.predict(X_test_s)
-y_prob = calibrated.predict_proba(X_test_s)[:, 1]
-print(classification_report(y_test, y_pred, target_names=['False Positive', 'Planet Candidate']))
-print(f"ROC-AUC: {roc_auc_score(y_test, y_prob):.4f}")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+logger = logging.getLogger("train")
 
-# ── Save ───────────────────────────────────────────────────────────────────────
-os.makedirs('model', exist_ok=True)
-pkg = {
-    'model': calibrated,
-    'scaler': scaler,
-    'feature_names': FEATURE_NAMES,
-    'version': 'v2',
-    'description': 'Calibrated RF+XGBoost ensemble trained on Kepler DR25 TCE / synthetic data'
-}
-joblib.dump(pkg, 'model/exoplanet_model_v2.pkl')
-print("\n✅ Model saved to model/exoplanet_model_v2.pkl")
-print(f"   Features: {FEATURE_NAMES}")
+ROOT = Path(__file__).resolve().parent
+DATA_PATH = ROOT / "data" / "koi_cumulative.csv"
+MODEL_PATH = ROOT / "model" / "exoplanet_model_v3.pkl"
+METRICS_PATH = ROOT / "docs" / "metrics.json"
+IMG_DIR = ROOT / "docs" / "img"
+
+TAP_URL = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+TAP_QUERY = (
+    "select kepoi_name,koi_disposition,koi_period,koi_depth,koi_duration,"
+    "koi_model_snr,koi_ror from cumulative"
+)
+
+SEED = 42
+
+# Figure theme (GitHub-dark surface; single accent hue, statuses reserved)
+SURFACE = "#0d1117"
+PANEL = "#161b22"
+INK = "#e6edf3"
+INK_MUTED = "#8b949e"
+GRID = "#21262d"
+ACCENT = "#818cf8"       # indigo - primary series
+ACCENT_2 = "#22d3ee"     # cyan - second series where needed
+NEGATIVE = "#f87171"     # rose - 'false positive' class only
+
+
+def download_koi_catalog(dest: Path) -> None:
+    """Fetch the KOI cumulative table (with dispositions) from the Exoplanet Archive."""
+    logger.info("Downloading KOI cumulative catalog from NASA Exoplanet Archive...")
+    resp = requests.get(
+        TAP_URL, params={"query": TAP_QUERY, "format": "csv"}, timeout=120
+    )
+    resp.raise_for_status()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(resp.content)
+    logger.info("Saved catalog to %s (%.1f MB)", dest, dest.stat().st_size / 1e6)
+
+
+def build_dataset(csv_path: Path) -> tuple[pd.DataFrame, pd.Series]:
+    """Turn the KOI catalog into (features, labels) in pipeline units."""
+    df = pd.read_csv(csv_path, comment="#")
+    df = df.dropna(subset=["koi_disposition", "koi_period", "koi_depth", "koi_duration", "koi_model_snr"])
+    df = df[df["koi_disposition"].isin(["CONFIRMED", "FALSE POSITIVE"])].copy()
+
+    # Physical sanity filters
+    df = df[(df["koi_period"] > 0) & (df["koi_depth"] > 0) & (df["koi_duration"] > 0) & (df["koi_model_snr"] > 0)]
+    df = df[df["koi_depth"] < 1e6]  # a >100% "transit" is a catalog artifact
+
+    rp_rs = df["koi_ror"].fillna(np.sqrt(df["koi_depth"] * 1e-6))
+    duration_days = df["koi_duration"] / 24.0
+
+    features = pd.DataFrame(
+        {
+            "period_days": df["koi_period"],
+            "depth_ppm": df["koi_depth"],
+            "duration_hrs": df["koi_duration"],
+            "model_snr": df["koi_model_snr"],
+            "rp_rs": rp_rs,
+            "log10_depth": np.log10(df["koi_depth"].clip(lower=1.0)),
+            "log10_period": np.log10(df["koi_period"].clip(lower=1e-3)),
+            "duration_over_period": duration_days / df["koi_period"],
+        }
+    )[FEATURE_NAMES]
+
+    labels = (df["koi_disposition"] == "CONFIRMED").astype(int)
+    features = features.replace([np.inf, -np.inf], np.nan).dropna()
+    labels = labels.loc[features.index]
+    return features, labels
+
+
+def build_ensemble(y_fit: np.ndarray) -> VotingClassifier:
+    scale_pos_weight = float((y_fit == 0).sum()) / max(int((y_fit == 1).sum()), 1)
+    rf = RandomForestClassifier(
+        n_estimators=300,
+        max_depth=12,
+        min_samples_leaf=3,
+        class_weight="balanced",
+        random_state=SEED,
+        n_jobs=-1,
+    )
+    xgb = XGBClassifier(
+        n_estimators=400,
+        max_depth=5,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        eval_metric="logloss",
+        tree_method="hist",
+        scale_pos_weight=scale_pos_weight,
+        random_state=SEED,
+        n_jobs=-1,
+    )
+    return VotingClassifier(estimators=[("rf", rf), ("xgb", xgb)], voting="soft")
+
+
+def _style_axes(ax: plt.Axes) -> None:
+    ax.set_facecolor(SURFACE)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    for spine in ("left", "bottom"):
+        ax.spines[spine].set_color(GRID)
+    ax.tick_params(colors=INK_MUTED, labelsize=9)
+    ax.xaxis.label.set_color(INK_MUTED)
+    ax.yaxis.label.set_color(INK_MUTED)
+    ax.title.set_color(INK)
+    ax.grid(color=GRID, linewidth=0.6, alpha=0.6)
+    ax.set_axisbelow(True)
+
+
+def _new_fig(title: str) -> tuple[plt.Figure, plt.Axes]:
+    fig, ax = plt.subplots(figsize=(7.2, 4.6), dpi=150, facecolor=SURFACE)
+    # loc="left" stores the heading in _left_title, so color must be set here
+    ax.set_title(title, fontsize=12, fontweight="bold", pad=12, loc="left", color=INK)
+    _style_axes(ax)
+    return fig, ax
+
+
+def _save(fig: plt.Figure, name: str) -> None:
+    IMG_DIR.mkdir(parents=True, exist_ok=True)
+    path = IMG_DIR / name
+    fig.savefig(path, bbox_inches="tight", facecolor=SURFACE)
+    plt.close(fig)
+    logger.info("Wrote %s", path)
+
+
+def make_figures(
+    model: CalibratedClassifierCV,
+    X_test_s: np.ndarray,
+    y_test: np.ndarray,
+    y_prob: np.ndarray,
+    metrics: dict,
+) -> None:
+    # ROC curve
+    fpr, tpr, _ = roc_curve(y_test, y_prob)
+    fig, ax = _new_fig("ROC curve — held-out test set")
+    ax.plot([0, 1], [0, 1], color=INK_MUTED, linewidth=1, linestyle="--", alpha=0.6)
+    ax.plot(fpr, tpr, color=ACCENT, linewidth=2)
+    ax.annotate(
+        f"AUC = {metrics['roc_auc']:.3f}", xy=(0.62, 0.12), color=INK, fontsize=11, fontweight="bold"
+    )
+    ax.set_xlabel("False positive rate")
+    ax.set_ylabel("True positive rate")
+    _save(fig, "roc_curve.png")
+
+    # Precision-recall curve
+    precision, recall, _ = precision_recall_curve(y_test, y_prob)
+    fig, ax = _new_fig("Precision–recall curve — held-out test set")
+    ax.plot(recall, precision, color=ACCENT_2, linewidth=2)
+    base_rate = float(np.mean(y_test))
+    ax.axhline(base_rate, color=INK_MUTED, linewidth=1, linestyle="--", alpha=0.6)
+    ax.annotate(f"AP = {metrics['pr_auc']:.3f}", xy=(0.05, 0.15), color=INK, fontsize=11, fontweight="bold")
+    ax.annotate(f"baseline = {base_rate:.2f}", xy=(0.05, base_rate + 0.03), color=INK_MUTED, fontsize=9)
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_ylim(0, 1.05)
+    _save(fig, "pr_curve.png")
+
+    # Confusion matrix (single-hue sequential, direct labels)
+    cm = confusion_matrix(y_test, (y_prob >= 0.5).astype(int))
+    fig, ax = plt.subplots(figsize=(5.4, 4.6), dpi=150, facecolor=SURFACE)
+    disp = ConfusionMatrixDisplay(cm, display_labels=["False Positive", "Confirmed Planet"])
+    disp.plot(ax=ax, cmap="Purples", colorbar=False, values_format="d", text_kw={"fontsize": 13})
+    _style_axes(ax)
+    ax.grid(visible=False)
+    ax.set_title(
+        "Confusion matrix — held-out test set",
+        fontsize=12, fontweight="bold", pad=12, loc="left", color=INK,
+    )
+    _save(fig, "confusion_matrix.png")
+
+    # Reliability (calibration) diagram
+    frac_pos, mean_pred = calibration_curve(y_test, y_prob, n_bins=10, strategy="quantile")
+    fig, ax = _new_fig("Probability calibration — held-out test set")
+    ax.plot([0, 1], [0, 1], color=INK_MUTED, linewidth=1, linestyle="--", alpha=0.6)
+    ax.plot(mean_pred, frac_pos, color=ACCENT, linewidth=2, marker="o", markersize=5)
+    ax.annotate(f"Brier = {metrics['brier']:.3f}", xy=(0.62, 0.10), color=INK, fontsize=11, fontweight="bold")
+    ax.set_xlabel("Predicted planet probability")
+    ax.set_ylabel("Observed planet fraction")
+    _save(fig, "calibration_curve.png")
+
+    # Permutation feature importance (model-agnostic, computed on the test set)
+    logger.info("Computing permutation importance...")
+    imp = permutation_importance(
+        model, X_test_s, y_test, scoring="roc_auc", n_repeats=10, random_state=SEED, n_jobs=-1
+    )
+    order = np.argsort(imp.importances_mean)
+    fig, ax = _new_fig("Permutation importance (ΔAUC) — held-out test set")
+    names = [FEATURE_NAMES[i] for i in order]
+    ax.barh(names, imp.importances_mean[order], xerr=imp.importances_std[order],
+            color=ACCENT, height=0.55, error_kw={"ecolor": INK_MUTED, "elinewidth": 1})
+    ax.set_xlabel("Mean decrease in ROC-AUC when shuffled")
+    ax.grid(axis="y", visible=False)
+    _save(fig, "feature_importance.png")
+
+    # Predicted-probability distributions per class
+    fig, ax = _new_fig("Predicted probability by true class — held-out test set")
+    bins = np.linspace(0, 1, 41)
+    ax.hist(y_prob[y_test == 0], bins=bins, color=NEGATIVE, alpha=0.75, label="False positives")
+    ax.hist(y_prob[y_test == 1], bins=bins, color=ACCENT, alpha=0.75, label="Confirmed planets")
+    ax.set_xlabel("Predicted planet probability")
+    ax.set_ylabel("Count")
+    legend = ax.legend(facecolor=PANEL, edgecolor=GRID, labelcolor=INK, fontsize=9)
+    legend.get_frame().set_alpha(0.9)
+    _save(fig, "score_distribution.png")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--refresh-data", action="store_true", help="Re-download the KOI catalog")
+    args = parser.parse_args()
+
+    if args.refresh_data or not DATA_PATH.exists():
+        download_koi_catalog(DATA_PATH)
+
+    X_df, y = build_dataset(DATA_PATH)
+    X, y = X_df.values, y.values
+    logger.info(
+        "Dataset: %d samples (%d confirmed planets, %d false positives)",
+        len(y), int(y.sum()), int((y == 0).sum()),
+    )
+
+    # test held out for final metrics; calibration split held out from fitting
+    X_trainval, X_test, y_trainval, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=SEED, stratify=y
+    )
+    X_fit, X_cal, y_fit, y_cal = train_test_split(
+        X_trainval, y_trainval, test_size=0.2, random_state=SEED, stratify=y_trainval
+    )
+
+    scaler = StandardScaler().fit(X_fit)
+    X_fit_s, X_cal_s, X_test_s = (scaler.transform(a) for a in (X_fit, X_cal, X_test))
+
+    logger.info("Cross-validating ensemble (5-fold stratified, ROC-AUC)...")
+    cv_pipeline = make_pipeline(StandardScaler(), build_ensemble(y_trainval))
+    cv_scores = cross_val_score(
+        cv_pipeline, X_trainval, y_trainval,
+        cv=StratifiedKFold(5, shuffle=True, random_state=SEED), scoring="roc_auc", n_jobs=1,
+    )
+    logger.info("CV ROC-AUC: %.4f ± %.4f", cv_scores.mean(), cv_scores.std())
+
+    logger.info("Training RandomForest + XGBoost soft-voting ensemble...")
+    ensemble = build_ensemble(y_fit)
+    ensemble.fit(X_fit_s, y_fit)
+
+    logger.info("Calibrating probabilities (Platt scaling on held-out split)...")
+    calibrated = CalibratedClassifierCV(FrozenEstimator(ensemble), method="sigmoid")
+    calibrated.fit(X_cal_s, y_cal)
+
+    y_prob = calibrated.predict_proba(X_test_s)[:, 1]
+    y_pred = (y_prob >= 0.5).astype(int)
+
+    metrics = {
+        "n_samples": int(len(y)),
+        "n_train": int(len(y_fit)),
+        "n_calibration": int(len(y_cal)),
+        "n_test": int(len(y_test)),
+        "class_balance": {"confirmed": int(y.sum()), "false_positive": int((y == 0).sum())},
+        "accuracy": round(float(accuracy_score(y_test, y_pred)), 4),
+        "precision": round(float(precision_score(y_test, y_pred)), 4),
+        "recall": round(float(recall_score(y_test, y_pred)), 4),
+        "f1": round(float(f1_score(y_test, y_pred)), 4),
+        "roc_auc": round(float(roc_auc_score(y_test, y_prob)), 4),
+        "pr_auc": round(float(average_precision_score(y_test, y_prob)), 4),
+        "brier": round(float(brier_score_loss(y_test, y_prob)), 4),
+        "cv_roc_auc_mean": round(float(cv_scores.mean()), 4),
+        "cv_roc_auc_std": round(float(cv_scores.std()), 4),
+        "trained_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "training_data": "NASA Exoplanet Archive KOI cumulative catalog",
+    }
+
+    print("\n" + classification_report(y_test, y_pred, target_names=["False Positive", "Confirmed Planet"]))
+    print(f"ROC-AUC: {metrics['roc_auc']:.4f} | PR-AUC: {metrics['pr_auc']:.4f} | Brier: {metrics['brier']:.4f}")
+
+    METRICS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    METRICS_PATH.write_text(json.dumps(metrics, indent=2))
+    logger.info("Wrote %s", METRICS_PATH)
+
+    make_figures(calibrated, X_test_s, y_test, y_prob, metrics)
+
+    MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    package = {
+        "model": calibrated,
+        "scaler": scaler,
+        "feature_names": FEATURE_NAMES,
+        "version": "v3",
+        "metrics": metrics,
+        "description": (
+            "Calibrated RandomForest+XGBoost soft-voting ensemble trained on the "
+            "NASA Exoplanet Archive KOI cumulative catalog (CONFIRMED vs FALSE POSITIVE)"
+        ),
+    }
+    joblib.dump(package, MODEL_PATH, compress=3)
+    logger.info("Model saved to %s (%.1f MB)", MODEL_PATH, MODEL_PATH.stat().st_size / 1e6)
+
+
+if __name__ == "__main__":
+    main()
