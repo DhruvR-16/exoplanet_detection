@@ -433,6 +433,18 @@ def odd_even_test(
     return depth_diff, float(duration_diff), mad_ratio, welch_p
 
 
+def transit_duration_estimate(period: float, a_over_r: float, impact: float = 0.0) -> float:
+    """Approximate transit duration (days) for a circular orbit.
+
+    T = (P / pi) * arcsin( sqrt(1 - b^2) / (a/R) ). Used to estimate the
+    injected-transit SNR in the injection-recovery study.
+    """
+    if period <= 0 or a_over_r <= 1.0:
+        return 0.0
+    arg = np.sqrt(max(1.0 - impact**2, 0.0)) / a_over_r
+    return float(period / np.pi * np.arcsin(np.clip(arg, 0.0, 1.0)))
+
+
 def check_transit_physics(
     period: float, duration_days: float, r_star: float, m_star: float
 ) -> dict[str, Any]:
