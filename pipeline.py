@@ -170,7 +170,19 @@ def load_lightcurve(
     info["message"] explains why. Always returns a 2-tuple.
     """
     CACHE_DIR.mkdir(exist_ok=True)
-    cache_path = CACHE_DIR / f"{_safe_name(target)}.fits"
+    # Key the cache by sector budget so a 1-sector request and a 3-sector request
+    # never collide (a star cached at 1 sector must not satisfy a 3-sector fetch).
+    cache_path = CACHE_DIR / f"{_safe_name(target)}_s{max_sectors}.fits"
+    legacy_path = CACHE_DIR / f"{_safe_name(target)}.fits"
+    # Reuse a pre-existing unsuffixed cache only if it actually holds at least the
+    # requested number of sectors (older caches lacking the tag are assumed full).
+    if not cache_path.exists() and legacy_path.exists():
+        try:
+            legacy_sectors = int(lk.read(str(legacy_path)).meta.get("SECTORS", max_sectors))
+        except Exception:
+            legacy_sectors = 0
+        if legacy_sectors >= max_sectors:
+            cache_path = legacy_path
 
     if cache_path.exists():
         try:

@@ -39,7 +39,19 @@ TOI_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php?output=csv"
 RESULTS_DIR = ROOT / "research" / "results"
 BENCHMARK_CSV = RESULTS_DIR / "tess_benchmark.csv"
 BENCHMARK_PARQUET = RESULTS_DIR / "tess_benchmark.parquet"
+METRICS_JSON = RESULTS_DIR / "tess_metrics.json"
 IMG_DIR = ROOT / "docs" / "img"
+FIG_SUFFIX = ""   # e.g. "_s3" to keep multi-sector figures separate from single-sector
+
+
+def set_output_tag(tag: str) -> None:
+    """Route all outputs to tag-suffixed files (keeps runs side by side)."""
+    global BENCHMARK_CSV, BENCHMARK_PARQUET, METRICS_JSON, FIG_SUFFIX
+    suffix = f"_{tag}" if tag else ""
+    BENCHMARK_CSV = RESULTS_DIR / f"tess_benchmark{suffix}.csv"
+    BENCHMARK_PARQUET = RESULTS_DIR / f"tess_benchmark{suffix}.parquet"
+    METRICS_JSON = RESULTS_DIR / f"tess_metrics{suffix}.json"
+    FIG_SUFFIX = suffix
 
 POSITIVE_DISP = {"CP", "KP"}   # confirmed / known planet
 NEGATIVE_DISP = {"FP", "FA"}   # false positive / false alarm
@@ -215,7 +227,7 @@ def make_figures(df: pd.DataFrame) -> None:
         ax.annotate(f"TESS AUC = {auc:.3f}\n(Kepler CV = 0.964)", xy=(0.5, 0.12),
                     color=theme.INK, fontsize=10, fontweight="bold")
         ax.set_xlabel("False positive rate"); ax.set_ylabel("True positive rate")
-        theme.save(fig, IMG_DIR / "tess_roc.png")
+        theme.save(fig, IMG_DIR / f"tess_roc{FIG_SUFFIX}.png")
 
         prec, rec, _ = precision_recall_curve(y, p)
         fig, ax = theme.new_fig("Cross-mission PR — TESS test set")
@@ -223,7 +235,7 @@ def make_figures(df: pd.DataFrame) -> None:
         ax.axhline(n_pos / len(y), color=theme.INK_MUTED, ls="--", lw=1, alpha=0.6)
         ax.annotate(f"AP = {ap:.3f}", xy=(0.05, 0.15), color=theme.INK, fontsize=11, fontweight="bold")
         ax.set_xlabel("Recall"); ax.set_ylabel("Precision"); ax.set_ylim(0, 1.05)
-        theme.save(fig, IMG_DIR / "tess_pr.png")
+        theme.save(fig, IMG_DIR / f"tess_pr{FIG_SUFFIX}.png")
 
     # Confusion matrix at 0.5
     cm = confusion_matrix(y, (p >= 0.5).astype(int), labels=[0, 1])
@@ -233,7 +245,7 @@ def make_figures(df: pd.DataFrame) -> None:
     theme.style_axes(ax); ax.grid(visible=False)
     ax.set_title("TESS confusion matrix (threshold 0.5)", fontsize=12, fontweight="bold",
                  pad=12, loc="left", color=theme.INK)
-    theme.save(fig, IMG_DIR / "tess_confusion.png")
+    theme.save(fig, IMG_DIR / f"tess_confusion{FIG_SUFFIX}.png")
 
     # Calibration
     n_bins = min(10, max(3, len(ok) // 15))
@@ -243,7 +255,7 @@ def make_figures(df: pd.DataFrame) -> None:
     ax.plot(mean_pred, frac_pos, color=theme.ACCENT, lw=2, marker="o", markersize=5)
     ax.annotate(f"Brier = {brier:.3f}", xy=(0.6, 0.1), color=theme.INK, fontsize=11, fontweight="bold")
     ax.set_xlabel("Predicted planet probability"); ax.set_ylabel("Observed planet fraction")
-    theme.save(fig, IMG_DIR / "tess_calibration.png")
+    theme.save(fig, IMG_DIR / f"tess_calibration{FIG_SUFFIX}.png")
 
     metrics = {
         "n_targets_attempted": int(len(df)),
@@ -255,7 +267,7 @@ def make_figures(df: pd.DataFrame) -> None:
         "kepler_cv_roc_auc": 0.964,
     }
     import json
-    (RESULTS_DIR / "tess_metrics.json").write_text(json.dumps(metrics, indent=2))
+    METRICS_JSON.write_text(json.dumps(metrics, indent=2))
     logger.info("TESS metrics: %s", metrics)
 
 
@@ -264,10 +276,12 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=20, help="Number of targets (class-balanced)")
     ap.add_argument("--max-sectors", type=int, default=BENCHMARK_MAX_SECTORS,
                     help="Sectors per target (1 = fast; more = fairer detection, slower)")
+    ap.add_argument("--tag", default="", help="Suffix for output files (e.g. 's3' keeps runs separate)")
     ap.add_argument("--refresh-toi", action="store_true", help="Re-download the ExoFOP TOI table")
     ap.add_argument("--figures-only", action="store_true", help="Only regenerate figures from the CSV")
     args = ap.parse_args()
 
+    set_output_tag(args.tag)
     if args.refresh_toi:
         download_toi_table()
     if args.figures_only:
