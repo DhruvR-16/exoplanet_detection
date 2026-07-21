@@ -16,6 +16,10 @@ backend/lc_cache/
 pipeline_cache/
 predictions.csv
 
+# Research: keep small result tables + JSON summaries; drop logs and derived parquet
+research/results/*.log
+research/results/*.parquet
+
 # Node.js / Next.js
 frontend/node_modules/
 frontend/.next/

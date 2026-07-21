@@ -1,0 +1,7 @@
+check,fp_flagged,fp_flag_rate
+SDE >= 7,30,0.375
+odd/even,14,0.175
+duration,2,0.025
+density,3,0.037
+no secondary,8,0.1
+ANY physics check,46,0.575

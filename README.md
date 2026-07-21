@@ -191,17 +191,75 @@ expoplanet_detection/
 │   └── app/               # Next.js 16 + Tailwind UI (charts, vetting cards, model view)
 ├── model/
 │   └── exoplanet_model_v3.pkl   # Calibrated RF+XGBoost ensemble (2.8 MB)
+├── research/              # Characterization study (see "Research" below)
+│   ├── tess_benchmark.py  # Cross-mission benchmark on labeled TESS TOIs
+│   ├── injection.py       # Mandel–Agol injection–recovery completeness
+│   ├── disagreement.py    # ML×physics disagreement triage analysis
+│   ├── baselines.py       # Model comparison + feature/physics ablations
+│   ├── cnn_baseline.py    # 1D-CNN shape baseline
+│   └── run_all.py         # Reproduce the whole study
+├── paper/                 # LaTeX preprint draft (paper.tex)
 ├── docs/
 │   ├── metrics.json       # Held-out test metrics (written by train_model.py)
-│   └── img/               # Training + pipeline result figures used above
+│   └── img/               # Training, pipeline, and research figures
 ├── data/                  # KOI training catalog (auto-downloaded, gitignored)
 ├── lc_cache/              # Cached TESS lightcurves (auto-downloaded, gitignored)
 └── requirements.txt
 ```
 
+## 🔬 Research: characterizing the pipeline
+
+Beyond the working tool, [`research/`](research/) treats the pipeline as a
+**characterized decision system** — the basis for a short paper
+([`paper/paper.tex`](paper/paper.tex)). The thesis: a detection pipeline should be
+reported not as one accuracy number but by *what it can detect*, *how it transfers
+across missions*, and *where its two independent judgements disagree*. Reproduce
+everything with `python -m research.run_all`.
+
+**1 · Injection–recovery completeness.** Injecting `batman` transits into real,
+screened-quiet TESS light curves and running the full pipeline maps detection
+completeness over period and radius. The recovery "sweet spot" (4–6 R⊕, 2–8 day
+periods → ~100%) is bounded below by the detection floor (Earth-size: 0%), above
+by the classifier correctly *rejecting* giant EB-like depths, and toward long
+periods by having fewer transits per sector.
+
+<img src="docs/img/injection_completeness_clf.png" alt="Injection-recovery completeness map" width="560"/>
+
+**2 · Honest cross-mission transfer.** A classifier scoring **ROC-AUC 0.96 in
+Kepler cross-validation drops to 0.68 on a labeled TESS test set** (160 TOIs,
+CP/KP vs FP/FA). Tellingly, **no learned model beats a simple physical SNR cut
+cross-mission** — the learned feature combinations overfit Kepler-specific
+structure. This is the finding a headline in-mission AUC hides.
+
+| Model (trained on Kepler, tested on TESS) | ROC-AUC |
+| :--- | :---: |
+| SDE / SNR threshold (no ML) | **0.681** |
+| RF + XGBoost ensemble (ours) | 0.659 |
+| 1D-CNN (folded views) | 0.641 |
+| Decision tree | 0.603 |
+| Logistic regression | 0.576 |
+| MLP | 0.508 |
+
+**3 · Disagreement as a triage signal (headline).** The calibrated ML score and
+the 5-check physics verdict are *independent*, so their disagreement is
+information. Crossing them into four quadrants (n = 160):
+
+<img src="docs/img/disagreement_quadrants.png" alt="ML-physics disagreement quadrants" width="600"/>
+
+Agreement is purest (both-say-planet → 74% real planets; both-say-FP → 71% real
+FPs), but the **"ML-skeptical, physics-pass" quadrant holds 43 real planets — over
+half of all planets in the set — that the Kepler-trained ML rejects and the
+mission-agnostic physics rescues.** We propose ranking scarce follow-up by
+disagreement rather than by probability alone. Physics checks independently reject
+57.5% of the false positives.
+
+> Full method, caveats, and reproduction steps: [`research/README.md`](research/README.md).
+> Numbers regenerate from public archives; heavy stages are resumable.
+
 ## Honest limitations
 
-- The classifier is trained on **Kepler** statistics and applied to **TESS** TLS fits; the shared, unit-matched feature space makes this transfer reasonable, but it is still a domain shift.
+- The classifier is trained on **Kepler** statistics and applied to **TESS** TLS fits; the shared, unit-matched feature space makes this transfer reasonable, but it is still a domain shift — quantified honestly in the [research study](research/) (AUC 0.96 → 0.68).
+- **The cross-mission benchmark uses single-sector light curves** for tractability, which lower-bounds detection; multi-sector stitching would raise completeness (the benchmark's `--max-sectors` flag lifts this).
 - **Deep, short-period signals (hot Jupiters) often land in the AMBIGUOUS verdict**: in the labeled training population such signals are mostly eclipsing binaries, so the ML is deliberately conservative there even when physics vetting passes — exactly the case that professionally requires radial-velocity follow-up.
 - A "planet candidate" verdict is a screening signal, not a discovery — real candidates require pixel-level vetting, follow-up photometry and radial velocities.
 - The TLS search is bounded to periods of 0.5–15 days (≥2 transits required in the observed baseline), so long-period planets are out of scope by design.

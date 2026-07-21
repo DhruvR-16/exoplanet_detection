@@ -1,0 +1,7 @@
+ablation,features_used,tess_auc,delta_auc
+full model,8,0.6588,0.0
+"drop shape (Rp/Rs, dur/P)",6,0.6381,-0.0207
+drop signal (SNR),7,0.6245,-0.0343
+"drop depth (depth_ppm, log10_depth)",6,0.668,0.0092
+"drop period (period_days, log10_period)",6,0.6556,-0.0032
+drop duration (duration_hrs),7,0.6611,0.0023

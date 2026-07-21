@@ -1,0 +1,110 @@
+{
+  "models": [
+    {
+      "model": "SDE/SNR threshold (no ML)",
+      "auc": 0.6813,
+      "ap": 0.6825,
+      "brier": 0.2743
+    },
+    {
+      "model": "Logistic regression",
+      "auc": 0.5763,
+      "ap": 0.5515,
+      "brier": 0.2723
+    },
+    {
+      "model": "Decision tree (depth 4)",
+      "auc": 0.6025,
+      "ap": 0.5655,
+      "brier": 0.3186
+    },
+    {
+      "model": "MLP (32,16)",
+      "auc": 0.5078,
+      "ap": 0.5379,
+      "brier": 0.3904
+    },
+    {
+      "model": "RF+XGB ensemble (ours)",
+      "auc": 0.6588,
+      "ap": 0.6323,
+      "brier": 0.2786
+    },
+    {
+      "model": "1D-CNN (folded views)",
+      "auc": 0.6414,
+      "ap": 0.6414,
+      "brier": 0.2765
+    }
+  ],
+  "feature_ablation": [
+    {
+      "ablation": "full model",
+      "features_used": 8,
+      "tess_auc": 0.6588,
+      "delta_auc": 0.0
+    },
+    {
+      "ablation": "drop shape (Rp/Rs, dur/P)",
+      "features_used": 6,
+      "tess_auc": 0.6381,
+      "delta_auc": -0.0207
+    },
+    {
+      "ablation": "drop signal (SNR)",
+      "features_used": 7,
+      "tess_auc": 0.6245,
+      "delta_auc": -0.0343
+    },
+    {
+      "ablation": "drop depth (depth_ppm, log10_depth)",
+      "features_used": 6,
+      "tess_auc": 0.668,
+      "delta_auc": 0.0092
+    },
+    {
+      "ablation": "drop period (period_days, log10_period)",
+      "features_used": 6,
+      "tess_auc": 0.6556,
+      "delta_auc": -0.0032
+    },
+    {
+      "ablation": "drop duration (duration_hrs)",
+      "features_used": 7,
+      "tess_auc": 0.6611,
+      "delta_auc": 0.0023
+    }
+  ],
+  "physics_ablation": [
+    {
+      "check": "SDE >= 7",
+      "fp_flagged": 30,
+      "fp_flag_rate": 0.375
+    },
+    {
+      "check": "odd/even",
+      "fp_flagged": 14,
+      "fp_flag_rate": 0.175
+    },
+    {
+      "check": "duration",
+      "fp_flagged": 2,
+      "fp_flag_rate": 0.025
+    },
+    {
+      "check": "density",
+      "fp_flagged": 3,
+      "fp_flag_rate": 0.037
+    },
+    {
+      "check": "no secondary",
+      "fp_flagged": 8,
+      "fp_flag_rate": 0.1
+    },
+    {
+      "check": "ANY physics check",
+      "fp_flagged": 46,
+      "fp_flag_rate": 0.575
+    }
+  ]
+}

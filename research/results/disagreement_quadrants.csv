@@ -1,0 +1,5 @@
+quadrant,ml_planet,physics_pass,n,planet_purity,n_true_planet,n_true_fp,mean_probability
+Both agree: PLANET,1,1,23,0.739,17,6,0.724
+Both agree: false positive,0,0,58,0.293,17,41,0.11
+"ML-optimistic (ML yes, physics no)",1,0,8,0.375,3,5,0.682
+"ML-skeptical (ML no, physics yes)",0,1,71,0.606,43,28,0.185

@@ -1,0 +1,9 @@
+{
+  "model": "1D-CNN on parametric folded views",
+  "n_train": 7325,
+  "n_test": 160,
+  "tess_auc": 0.6414,
+  "tess_ap": 0.6414,
+  "tess_brier": 0.2765,
+  "epochs": 40
+}

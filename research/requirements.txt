@@ -1,0 +1,5 @@
+# Additional dependencies for the research study (on top of ../requirements.txt)
+batman-package>=2.5      # Mandel-Agol transit models for injection-recovery
+pyarrow>=15.0            # parquet result storage
+astropy>=6.0            # (pulled in by lightkurve; pinned for reproducibility)
+# torch is already required by the repo for the 1D-CNN baseline
