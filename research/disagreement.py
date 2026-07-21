@@ -34,6 +34,15 @@ logger = logging.getLogger("disagreement")
 RESULTS_DIR = ROOT / "research" / "results"
 BENCHMARK_PARQUET = RESULTS_DIR / "tess_benchmark.parquet"
 IMG_DIR = ROOT / "docs" / "img"
+FIG_SUFFIX = ""   # e.g. "_s3" to keep multi-sector outputs separate
+
+
+def set_tag(tag: str) -> None:
+    """Route inputs/outputs to tag-suffixed files (keeps runs side by side)."""
+    global BENCHMARK_PARQUET, FIG_SUFFIX
+    suffix = f"_{tag}" if tag else ""
+    BENCHMARK_PARQUET = RESULTS_DIR / f"tess_benchmark{suffix}.parquet"
+    FIG_SUFFIX = suffix
 
 QUADRANTS = {
     (1, 1): "Both agree: PLANET",
@@ -110,7 +119,7 @@ def make_figures(df: pd.DataFrame, table: pd.DataFrame) -> None:
                  fontweight="bold", pad=12, loc="left", color=theme.INK)
     ax.tick_params(colors=theme.INK_MUTED, labelsize=9)
     theme.legend(ax, loc="center left")
-    theme.save(fig, IMG_DIR / "disagreement_quadrants.png")
+    theme.save(fig, IMG_DIR / f"disagreement_quadrants{FIG_SUFFIX}.png")
 
     # 2. Probability vs physics-score (0-5), colored by truth
     fig, ax = theme.new_fig("ML probability vs physics vetting score")
@@ -124,7 +133,7 @@ def make_figures(df: pd.DataFrame, table: pd.DataFrame) -> None:
     ax.set_ylabel("Physics checks passed (of 5)")
     ax.set_yticks(range(6))
     theme.legend(ax, loc="lower right")
-    theme.save(fig, IMG_DIR / "disagreement_score_scatter.png")
+    theme.save(fig, IMG_DIR / f"disagreement_score_scatter{FIG_SUFFIX}.png")
 
 
 def main() -> None:
@@ -137,8 +146,8 @@ def main() -> None:
     cols = ["tic_id", "toi", "disposition", "label", "probability", "physics_score",
             "sde", "welch_p", "duration_ratio", "density_ratio", "period_days"]
     disagree = disagree[cols].sort_values("probability", ascending=False)
-    disagree.to_csv(RESULTS_DIR / "disagreement_targets.csv", index=False)
-    table.to_csv(RESULTS_DIR / "disagreement_quadrants.csv", index=False)
+    disagree.to_csv(RESULTS_DIR / f"disagreement_targets{FIG_SUFFIX}.csv", index=False)
+    table.to_csv(RESULTS_DIR / f"disagreement_quadrants{FIG_SUFFIX}.csv", index=False)
 
     # Summary: is agreement more reliable than disagreement? (the key claim)
     agree = df[df["ml_planet"] == df["physics_pass"]]
@@ -151,7 +160,7 @@ def main() -> None:
         "disagree_ml_optimistic_planet_purity": _purity(df, (1, 0)),
         "disagree_ml_skeptical_planet_purity": _purity(df, (0, 1)),
     }
-    (RESULTS_DIR / "disagreement_summary.json").write_text(json.dumps(summary, indent=2))
+    (RESULTS_DIR / f"disagreement_summary{FIG_SUFFIX}.json").write_text(json.dumps(summary, indent=2))
     logger.info("Summary: %s", json.dumps(summary, indent=2))
 
     make_figures(df, table)
@@ -167,4 +176,9 @@ def _purity(df: pd.DataFrame, key: tuple[int, int], want_fp: bool = False) -> fl
 
 
 if __name__ == "__main__":
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--tag", default="", help="Read/write tag-suffixed files (e.g. 's3')")
+    set_tag(ap.parse_args().tag)
     main()
