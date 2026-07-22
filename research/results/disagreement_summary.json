@@ -1,11 +1,11 @@
 {
-  "n_total": 160,
-  "n_agree": 81,
-  "n_disagree": 79,
-  "agree_planet_purity_when_both_yes": 0.739,
-  "agree_fp_purity_when_both_no": 0.707,
-  "disagree_ml_optimistic_planet_purity": 0.375,
-  "disagree_ml_skeptical_planet_purity": 0.606,
+  "n_total": 500,
+  "n_agree": 254,
+  "n_disagree": 246,
+  "agree_planet_purity_when_both_yes": 0.786,
+  "agree_fp_purity_when_both_no": 0.658,
+  "disagree_ml_optimistic_planet_purity": 0.552,
+  "disagree_ml_skeptical_planet_purity": 0.535,
   "base_rate_adjusted": {
     "prevalences": [
       0.497,
@@ -15,42 +15,42 @@
     "quadrants": [
       {
         "quadrant": "Both agree: PLANET",
-        "p_given_planet": 0.212,
-        "p_given_fp": 0.075,
+        "p_given_planet": 0.22,
+        "p_given_fp": 0.06,
         "purity_by_prevalence": {
-          "pi_0.497": 0.737,
-          "pi_0.25": 0.486,
-          "pi_0.1": 0.239
+          "pi_0.497": 0.784,
+          "pi_0.25": 0.55,
+          "pi_0.1": 0.289
         }
       },
       {
         "quadrant": "Both agree: false positive",
-        "p_given_planet": 0.212,
-        "p_given_fp": 0.512,
+        "p_given_planet": 0.252,
+        "p_given_fp": 0.484,
         "purity_by_prevalence": {
-          "pi_0.497": 0.291,
-          "pi_0.25": 0.121,
-          "pi_0.1": 0.044
+          "pi_0.497": 0.34,
+          "pi_0.25": 0.148,
+          "pi_0.1": 0.055
         }
       },
       {
         "quadrant": "ML-optimistic (ML yes, physics no)",
-        "p_given_planet": 0.037,
-        "p_given_fp": 0.062,
+        "p_given_planet": 0.064,
+        "p_given_fp": 0.052,
         "purity_by_prevalence": {
-          "pi_0.497": 0.372,
-          "pi_0.25": 0.167,
-          "pi_0.1": 0.062
+          "pi_0.497": 0.549,
+          "pi_0.25": 0.291,
+          "pi_0.1": 0.12
         }
       },
       {
         "quadrant": "ML-skeptical (ML no, physics yes)",
-        "p_given_planet": 0.537,
-        "p_given_fp": 0.35,
+        "p_given_planet": 0.464,
+        "p_given_fp": 0.404,
         "purity_by_prevalence": {
-          "pi_0.497": 0.603,
-          "pi_0.25": 0.339,
-          "pi_0.1": 0.146
+          "pi_0.497": 0.532,
+          "pi_0.25": 0.277,
+          "pi_0.1": 0.113
         }
       }
     ]

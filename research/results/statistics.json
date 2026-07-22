@@ -1,43 +1,43 @@
 {
   "n_boot": 2000,
   "tess_auc_s1": {
-    "auc": 0.6764,
-    "ci_low": 0.5928,
-    "ci_high": 0.7547
+    "auc": 0.7186,
+    "ci_low": 0.6714,
+    "ci_high": 0.7629
   },
   "base_rate_s1": 0.5,
   "quadrant_purity_s1": [
     {
       "quadrant": "Both agree: PLANET",
       "metric": "planet_purity",
-      "n": 23,
-      "purity": 0.739,
-      "ci_low": 0.535,
-      "ci_high": 0.875
+      "n": 70,
+      "purity": 0.786,
+      "ci_low": 0.676,
+      "ci_high": 0.866
     },
     {
       "quadrant": "Both agree: false positive",
       "metric": "fp_purity",
-      "n": 58,
-      "purity": 0.707,
-      "ci_low": 0.58,
-      "ci_high": 0.808
+      "n": 184,
+      "purity": 0.658,
+      "ci_low": 0.586,
+      "ci_high": 0.722
     },
     {
       "quadrant": "ML-optimistic (ML yes, physics no)",
       "metric": "planet_purity",
-      "n": 8,
-      "purity": 0.375,
-      "ci_low": 0.137,
-      "ci_high": 0.694
+      "n": 29,
+      "purity": 0.552,
+      "ci_low": 0.375,
+      "ci_high": 0.716
     },
     {
       "quadrant": "ML-skeptical (ML no, physics yes)",
       "metric": "planet_purity",
-      "n": 71,
-      "purity": 0.606,
-      "ci_low": 0.489,
-      "ci_high": 0.711
+      "n": 217,
+      "purity": 0.535,
+      "ci_low": 0.468,
+      "ci_high": 0.6
     }
   ],
   "tess_auc_s3": {

@@ -210,11 +210,13 @@ expoplanet_detection/
 ## 🔬 Research: characterizing the pipeline
 
 Beyond the working tool, [`research/`](research/) treats the pipeline as a
-**characterized decision system** — the basis for a short paper
+**characterized, validated decision system** — the basis for a short paper
 ([`paper/paper.tex`](paper/paper.tex)). The thesis: a detection pipeline should be
 reported not as one accuracy number but by *what it can detect*, *how it transfers
-across missions*, and *where its two independent judgements disagree*. Reproduce
-everything with `python -m research.run_all`.
+across missions*, and *which claims survive a larger sample and a validation
+battery*. Every number below is on a **500-target labeled TESS benchmark** with
+bootstrap/Wilson confidence intervals. Reproduce everything with
+`python -m research.run_all`.
 
 **1 · Injection–recovery completeness.** Injecting `batman` transits into real,
 screened-quiet TESS light curves and running the full pipeline maps detection
@@ -226,52 +228,58 @@ periods by having fewer transits per sector.
 <img src="docs/img/injection_completeness_clf.png" alt="Injection-recovery completeness map" width="560"/>
 
 **2 · Honest cross-mission transfer.** A classifier scoring **ROC-AUC 0.96 in
-Kepler cross-validation drops to 0.68 on a labeled TESS test set** (160 TOIs,
-CP/KP vs FP/FA). Tellingly, **no learned model beats a simple physical SNR cut
-cross-mission** — the learned feature combinations overfit Kepler-specific
-structure. This is the finding a headline in-mission AUC hides.
+Kepler cross-validation drops to 0.72 (95% CI [0.67, 0.76]) on TESS** (500 TOIs,
+CP/KP vs FP/FA), with calibration degrading (Brier 0.08 → 0.29). The ensemble
+remains the **best** cross-mission model — it beats a one-parameter SNR cut and
+every other learner:
 
 | Model (trained on Kepler, tested on TESS) | ROC-AUC |
 | :--- | :---: |
-| SDE / SNR threshold (no ML) | **0.681** |
-| RF + XGBoost ensemble (ours) | 0.659 |
+| RF + XGBoost ensemble (ours) | **0.710** |
+| Decision tree | 0.655 |
+| Logistic regression | 0.642 |
+| SDE / SNR threshold (no ML) | 0.641 |
 | 1D-CNN (folded views) | 0.641 |
-| Decision tree | 0.603 |
-| Logistic regression | 0.576 |
-| MLP | 0.508 |
+| MLP | 0.552 |
 
-*Does more data help?* Re-running the identical stars at **3 sectors** instead of 1
-lifts detection (period recovery 0.68 → 0.75) and calibration (Brier 0.33 → 0.29)
-and raises the model's confidence on real planets (0.33 → 0.45), but **ranking
-stays flat (AUC ≈ 0.70)** — the cross-mission gap is a distribution-shift problem,
-not a signal-to-noise one that more sectors resolve. (Regenerate with
-`python -m research.tess_benchmark --limit 160 --max-sectors 3 --tag s3`.)
+*Why doesn't it transfer?* The depth/radius→label direction **inverts** between
+missions: on Kepler deep transits skew toward eclipsing-binary FPs; among these
+TESS TOIs the deepest signals are disproportionately *confirmed planets* (both
+Mann–Whitney p < 10⁻⁴). A model that learned "deep ⇒ FP" is mis-oriented on TESS.
 
-**3 · Disagreement as a triage signal (headline).** The calibrated ML score and
-the 5-check physics verdict are *independent*, so their disagreement is
-information. Crossing them into four quadrants (n = 160):
+**3 · ML × physics: agreement works, disagreement doesn't (honest result).** The
+calibrated ML score and the 5-check physics verdict are *independent*. Crossing
+them into four quadrants (n = 500):
 
-<img src="docs/img/disagreement_quadrants.png" alt="ML-physics disagreement quadrants" width="600"/>
+<img src="docs/img/disagreement_quadrants.png" alt="ML-physics agreement quadrants" width="600"/>
 
-Agreement is purest (both-say-planet → 74% real planets, 95% CI [0.54, 0.88];
-both-say-FP → 71% real FPs), but the **"ML-skeptical, physics-pass" quadrant holds
-43 real planets — over half of all planets in the set — that the Kepler-trained ML
-rejects and the mission-agnostic physics rescues** (61% purity, [0.49, 0.71], above
-the 50% base rate). Physics checks independently reject 57.5% of the false positives.
+**Agreement is strongly predictive:** both-say-planet is **79% pure [0.68, 0.87]**
+(a planet is 3.7× more likely than an FP to land there), both-say-FP is planet-depleted,
+and physics vetting independently rejects **54% of false positives** (Fisher OR 2.5,
+p < 10⁻³). **Disagreement, however, is only marginal:** the "ML-skeptical, physics-pass"
+quadrant is just 54% planets [0.47, 0.60] — its interval includes the 50% base rate.
+A cleaner-looking 61% at an earlier 160-target sample **did not replicate**, and a
+physics-informed follow-up ranking shows **no reliable advantage** over probability
+alone at n = 500. We report these negatives honestly — testing your own headline and
+saying what survives is the point.
 
-**Does it help follow-up?** Ranking targets by a physics-informed score (physics-pass
-first, then probability) recovers planets more efficiently than ML probability alone
-— gain-curve area 0.62 vs 0.59, and half the planets after observing 33% of targets
-vs 39% — direct operational evidence that the disagreement signal is worth acting on.
+<img src="docs/img/quadrant_purity_ci.png" alt="Quadrant purity with confidence intervals" width="560"/>
 
-<img src="docs/img/triage_efficiency.png" alt="Follow-up efficiency curve" width="520"/>
+**4 · Validation (not hallucinating).** A [validation battery](research/validate.py)
+confirms the results are real: a label-permutation test collapses the AUC to a null
+centered at 0.50 with the observed 0.72 far outside (**p = 0**); both verdicts are
+significantly associated with truth (Fisher p < 10⁻³); and **350/350** recovered TLS
+periods match the independent ExoFOP catalog to <3% (median 0.07%). Kepler (KIC) and
+TESS (TIC) target sets are disjoint — no leakage.
+
+<img src="docs/img/validation_permutation.png" alt="Permutation test" width="520"/>
 
 > Full method, caveats, and reproduction steps: [`research/README.md`](research/README.md).
 > Numbers regenerate from public archives; heavy stages are resumable.
 
 ## Honest limitations
 
-- The classifier is trained on **Kepler** statistics and applied to **TESS** TLS fits; the shared, unit-matched feature space makes this transfer reasonable, but it is still a domain shift — quantified honestly in the [research study](research/) (AUC 0.96 → 0.68).
+- The classifier is trained on **Kepler** statistics and applied to **TESS** TLS fits; the shared, unit-matched feature space makes this transfer reasonable, but it is still a domain shift — quantified honestly in the [research study](research/) (AUC 0.96 → 0.72 [0.67, 0.76]).
 - **The cross-mission benchmark uses single-sector light curves** for tractability, which lower-bounds detection; multi-sector stitching would raise completeness (the benchmark's `--max-sectors` flag lifts this).
 - **Deep, short-period signals (hot Jupiters) often land in the AMBIGUOUS verdict**: in the labeled training population such signals are mostly eclipsing binaries, so the ML is deliberately conservative there even when physics vetting passes — exactly the case that professionally requires radial-velocity follow-up.
 - A "planet candidate" verdict is a screening signal, not a discovery — real candidates require pixel-level vetting, follow-up photometry and radial velocities.

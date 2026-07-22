@@ -1,88 +1,88 @@
 {
-  "n_targets": 160,
+  "n_targets": 500,
   "permutation_test": {
-    "real_auc": 0.6764,
-    "null_mean": 0.4988,
-    "null_p2.5": 0.4095,
-    "null_p97.5": 0.5894,
+    "real_auc": 0.7186,
+    "null_mean": 0.4996,
+    "null_p2.5": 0.4486,
+    "null_p97.5": 0.5504,
     "p_value": 0.0
   },
   "physics_pass_vs_label": {
     "table_[[c0l0,c0l1],[c1l0,c1l1]]": [
       [
-        46,
-        20
+        134,
+        79
       ],
       [
-        34,
-        60
+        116,
+        171
       ]
     ],
-    "odds_ratio": 4.059,
-    "p_value": 5e-05,
+    "odds_ratio": 2.5,
+    "p_value": 0.0,
     "significant_at_0.05": true
   },
   "ml_prediction_vs_label": {
     "table_[[c0l0,c0l1],[c1l0,c1l1]]": [
       [
-        69,
-        60
+        222,
+        179
       ],
       [
-        11,
-        20
+        28,
+        71
       ]
     ],
-    "odds_ratio": 2.091,
-    "p_value": 0.10859,
-    "significant_at_0.05": false
+    "odds_ratio": 3.145,
+    "p_value": 0.0,
+    "significant_at_0.05": true
   },
   "tls_period_vs_catalog": {
-    "n": 107,
+    "n": 350,
     "median_frac_err_direct": 0.0008,
-    "median_alias_err": 0.0008,
-    "within_3pct": 107
+    "median_alias_err": 0.0007,
+    "within_3pct": 350
   },
   "feature_directions": [
     {
       "feature": "rp_rs",
-      "planet_median": 0.0594,
-      "fp_median": 0.0299,
+      "planet_median": 0.0583,
+      "fp_median": 0.0307,
       "direction": "planet>FP",
-      "mannwhitney_p": 0.00013,
+      "mannwhitney_p": 0.0,
       "separates_at_0.05": true
     },
     {
       "feature": "model_snr",
-      "planet_median": 19.1617,
-      "fp_median": 9.8619,
+      "planet_median": 16.5443,
+      "fp_median": 10.0691,
       "direction": "planet>FP",
-      "mannwhitney_p": 8e-05,
+      "mannwhitney_p": 0.0,
       "separates_at_0.05": true
     },
     {
       "feature": "depth_ppm",
-      "planet_median": 4359.3644,
-      "fp_median": 1102.7006,
+      "planet_median": 4207.718,
+      "fp_median": 1162.3534,
       "direction": "planet>FP",
-      "mannwhitney_p": 0.00013,
+      "mannwhitney_p": 0.0,
       "separates_at_0.05": true
     },
     {
       "feature": "duration_over_period",
-      "planet_median": 0.0317,
-      "fp_median": 0.0431,
+      "planet_median": 0.0269,
+      "fp_median": 0.0415,
       "direction": "planet<FP",
-      "mannwhitney_p": 0.00735,
+      "mannwhitney_p": 0.0,
       "separates_at_0.05": true
     },
     {
       "feature": "period_days",
-      "planet_median": 3.7142,
-      "fp_median": 3.0213,
+      "planet_median": 3.7963,
+      "fp_median": 3.1893,
       "direction": "planet>FP",
-      "mannwhitney_p": 0.09618,
-      "separates_at_0.05": false
+      "mannwhitney_p": 0.00828,
+      "separates_at_0.05": true
     }
   ]
 }

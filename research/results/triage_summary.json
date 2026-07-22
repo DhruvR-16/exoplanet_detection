@@ -1,29 +1,29 @@
 {
-  "n_targets": 160,
-  "n_planets": 80,
+  "n_targets": 500,
+  "n_planets": 250,
   "ML probability": {
-    "gain_auc": 0.5913,
-    "budget_to_50pct_planets": 0.388,
-    "budget_to_80pct_planets": 0.669
+    "gain_auc": 0.6103,
+    "budget_to_50pct_planets": 0.354,
+    "budget_to_80pct_planets": 0.638
   },
   "Physics-informed (ML+physics)": {
-    "gain_auc": 0.6068,
-    "budget_to_50pct_planets": 0.356,
-    "budget_to_80pct_planets": 0.656
+    "gain_auc": 0.6014,
+    "budget_to_50pct_planets": 0.348,
+    "budget_to_80pct_planets": 0.68
   },
   "Physics-pass first, then ML": {
-    "gain_auc": 0.6191,
-    "budget_to_50pct_planets": 0.331,
-    "budget_to_80pct_planets": 0.662
+    "gain_auc": 0.6057,
+    "budget_to_50pct_planets": 0.336,
+    "budget_to_80pct_planets": 0.682
   },
   "Oracle (true label)": {
-    "gain_auc": 0.7531,
+    "gain_auc": 0.751,
     "budget_to_50pct_planets": 0.25,
     "budget_to_80pct_planets": 0.4
   },
   "Random": {
-    "gain_auc": 0.5044,
-    "budget_to_50pct_planets": 0.5,
-    "budget_to_80pct_planets": 0.8
+    "gain_auc": 0.5,
+    "budget_to_50pct_planets": 0.502,
+    "budget_to_80pct_planets": 0.802
   }
 }

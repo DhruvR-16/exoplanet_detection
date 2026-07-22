@@ -11,8 +11,8 @@
 \usepackage{xcolor}
 \graphicspath{{../docs/img/}}
 
-\title{\textbf{Agreement Is Cheap, Disagreement Is Information:\\
-Characterizing a Physics-Informed Transit Classifier Across Missions}}
+\title{\textbf{How Well Does a Kepler-Trained Transit Classifier Transfer to
+TESS? A Characterization Study}}
 \author{Dhruv R.\\ \small Preprint draft --- all numbers regenerate via \texttt{python -m research.run\_all}}
 \date{\today}
 
@@ -27,24 +27,24 @@ merit and present instead a \emph{characterized decision system}: an
 interpretable, physics-informed pipeline (Transit Least Squares $\rightarrow$
 eight physical features $\rightarrow$ a calibrated RandomForest\,+\,XGBoost
 ensemble $\rightarrow$ five orthogonal physics-vetting checks) whose behavior we
-map rather than summarize. Four results follow. (i) \textbf{Injection--recovery}:
-injecting Mandel--Agol transits into real, screened-quiet TESS light curves, we
-measure detection completeness across period and radius, exposing a recovery
-``sweet spot'' bounded by the noise floor, by eclipsing-binary rejection at large
-radius, and by the number of transits per sector. (ii) \textbf{Cross-mission
-transfer}: a classifier scoring ROC-AUC $0.96$ in Kepler cross-validation falls
-to $0.68$ (95\% CI $[0.59,0.75]$) on a labeled TESS test set, and --- strikingly
---- \emph{no learned model beats a physical signal-to-noise cut} cross-mission.
-More sectors improve detection and calibration but not ranking, so the gap is a
-distribution-shift problem, not a signal-to-noise one. (iii) \textbf{Disagreement
-as a signal}: because the ML score and the physics verdict are independent, their
-disagreement is informative; the ``ML-skeptical, physics-pass'' quadrant holds
-$61\%$ true planets ($[0.49,0.71]$) --- above the $50\%$ base rate --- so physics
-rescues planets the Kepler-trained model rejects on TESS. (iv) \textbf{Triage
-efficiency}: ranking follow-up by a physics-informed score recovers planets more
-efficiently than probability alone (gain-curve area $0.62$ vs.\ $0.59$; half the
-planets in $33\%$ vs.\ $39\%$ of the budget). We release a fully reproducible,
-interpretable baseline others can extend.
+map, and validate, rather than summarize. On a $500$-target labeled TESS
+benchmark: (i) \textbf{injection--recovery} maps detection completeness across
+period and radius, revealing a ``sweet spot'' bounded below by the noise floor,
+above by eclipsing-binary rejection, and toward long periods by transits per
+sector. (ii) \textbf{Cross-mission transfer} is severe but real: an ensemble
+scoring ROC-AUC $0.96$ in Kepler cross-validation falls to $0.72$ (95\% CI
+$[0.67,0.76]$) on TESS, with the Brier score degrading from $0.08$ to $0.29$; the
+separating direction of the depth and radius features \emph{inverts} between
+missions, a concrete mechanism for the gap. The ensemble nonetheless remains the
+best cross-mission model, beating a one-parameter SNR cut and every other learner.
+(iii) \textbf{ML $\times$ physics}: the two independent verdicts \emph{agree}
+informatively --- both-agree-planet is $79\%$ pure ($[0.68,0.87]$, $3.7\times$
+enriched) and physics vetting independently rejects $54\%$ of false positives ---
+but we test and report an honest negative: their \emph{disagreement} does not
+robustly identify extra planets, and a physics-informed follow-up ranking shows no
+reliable advantage over probability alone at this sample size. Every claim carries
+a bootstrap or permutation-based interval, and the whole study reproduces from
+public archives with one command.
 \end{abstract}
 
 \section{Introduction}
@@ -59,17 +59,28 @@ calibration and multimodal inputs \citep{exonet2026} but still frames the output
 as a single vetting score.
 
 We take a different stance: the output of a detection pipeline should be a
-\emph{characterized decision}, and the most useful information is often where two
-independent judgements \emph{disagree}. Our pipeline emits two such judgements ---
-a calibrated ML probability and an interpretable five-check physics verdict ---
-and we show their disagreement carries actionable information. Our contributions
-are: (1) an injection--recovery completeness map for a feature-based classical
-ensemble on real TESS data; (2) an honest, confidence-interval-qualified account
-of Kepler$\rightarrow$TESS transfer, including a controlled single- vs.\
-three-sector experiment; (3) the ML--physics disagreement framework, with a
-follow-up-efficiency analysis that operationalizes it; and (4) a fully
-reproducible, interpretable baseline. Every figure and number regenerates from
-public archives with one command.
+\emph{characterized decision}, and every claim about it should carry an
+uncertainty and survive a validation check. Our pipeline emits two independent
+judgements --- a calibrated ML probability and an interpretable five-check physics
+verdict --- and we ask not only how well each works but where they agree, where
+they disagree, and whether that structure is actionable. Our contributions are:
+(1) an injection--recovery completeness map for a feature-based classical ensemble
+on real TESS data; (2) an honest, confidence-interval-qualified account of
+Kepler$\rightarrow$TESS transfer, with a concrete distribution-shift mechanism;
+(3) an analysis of the ML--physics agreement structure, including a validated
+positive result (agreement is strongly predictive; physics adds orthogonal
+false-positive rejection) and an honest negative one (disagreement does not
+robustly surface extra planets, and physics-informed triage shows no reliable
+gain); and (4) a validation battery --- permutation test, association tests, and a
+catalog cross-check --- confirming the results are not artifacts. Every figure and
+number regenerates from public archives with one command.
+
+A note on scope: we deliberately report what does \emph{not} replicate. Two
+tentative effects visible at a $160$-target sample --- a physical SNR cut beating
+the learned models, and a follow-up-efficiency advantage for disagreement-aware
+ranking --- vanished when we grew the benchmark to $500$. We keep them in as a
+cautionary result about over-reading small-sample structure, which is itself part
+of the paper's point.
 
 \section{Data}
 \textbf{Training (Kepler).} We train on the NASA Exoplanet Archive KOI cumulative
@@ -79,9 +90,12 @@ catalog, using the definitive dispositions \textsc{confirmed} (positive) and
 
 \textbf{Test (TESS).} We build a labeled TESS benchmark from ExoFOP TFOPWG
 dispositions --- \textsc{cp}/\textsc{kp} as planets, \textsc{fp}/\textsc{fa} as
-false positives --- and run the full pipeline on a class-balanced sample of $160$
-TIC targets ($80/80$). This is the only place true TESS labels enter, and it
-measures real deployment performance.
+false positives --- and run the full pipeline on a class-balanced sample of $500$
+TIC targets ($250/250$). This is the only place true TESS labels enter, and it
+measures real deployment performance. The dispositioned-TOI base rate is itself
+$\approx\!0.50$ (1333 planets vs.\ 1349 false positives on ExoFOP), so the balanced
+benchmark matches deployment prevalence for the vetting task; we additionally
+report Bayes-adjusted purities for rarer, blind-search prevalences.
 
 \textbf{Injection corpus.} For completeness testing we inject synthetic transits
 into real TESS light curves screened to be transit-free (pre-injection TLS
@@ -139,20 +153,22 @@ threshold sits near the SDE\,$=7$ detection criterion.}
 
 \section{Cross-mission transfer}
 On the TESS benchmark the calibrated ensemble scores ROC-AUC
-$0.68$ ($95\%$ CI $[0.59,0.75]$), far below its Kepler cross-validation AUC of
-$0.964$, and its Brier score degrades from $0.08$ to $0.31$: the Kepler-calibrated
+$0.72$ ($95\%$ CI $[0.67,0.76]$), far below its Kepler cross-validation AUC of
+$0.964$, and its Brier score degrades from $0.08$ to $0.29$: the Kepler-calibrated
 probabilities are miscalibrated on TESS (Figure~\ref{fig:tessroc}). The interval
 excludes both chance ($0.5$) and the in-mission value, so the transfer drop is
-real, though the benchmark size makes it broad.
+large and robust. Class separation exists but is much weaker than in-mission: this
+is what a headline same-mission AUC hides.
 
-\paragraph{No learned model beats a physical cut.}
+\paragraph{The ensemble still beats simpler models.}
 Figure~\ref{fig:baselines} compares, under an identical Kepler-train /
 TESS-test protocol, an SDE/SNR threshold, logistic regression, a shallow tree, an
-MLP, our ensemble, and a 1D-CNN on parametric folded views. A one-parameter
-physical SNR threshold (AUC $0.68$) matches or beats every learned model
-(ensemble $0.66$, CNN $0.64$, tree $0.60$, logistic $0.58$, MLP $0.51$): the
-learned feature combinations overfit Kepler-specific structure that does not
-transfer. This is the finding a headline in-mission AUC hides.
+MLP, our ensemble, and a 1D-CNN on parametric folded views. The ensemble is the
+strongest cross-mission (AUC $0.71$), ahead of the tree ($0.66$), logistic
+($0.64$), the physical SNR cut ($0.64$), the CNN ($0.64$), and the MLP ($0.55$).
+(We note that at a smaller $160$-target sample the SNR cut appeared to match the
+ensemble; that apparent tie did not survive the larger benchmark --- a concrete
+example of why sample size and confidence intervals matter here.)
 
 \paragraph{Does more data close the gap?}
 Re-running the identical $101$ stars with three sectors instead of one (a matched,
@@ -189,38 +205,53 @@ The transfer gap is not a hand-wave: the \emph{separating direction} of the dept
 and radius features inverts between the two populations. In the Kepler training
 set deep transits skew toward eclipsing-binary false positives; in the TESS TOI
 sample the deepest, largest-$R_p/R_\star$ signals are disproportionately the
-\emph{confirmed} planets (planet vs.\ FP medians $4360$ vs.\ $1100$\,ppm and
-$0.059$ vs.\ $0.030$; both Mann--Whitney $p<10^{-3}$). A model that learned
+\emph{confirmed} planets (planet vs.\ FP medians $4210$ vs.\ $1160$\,ppm and
+$0.058$ vs.\ $0.031$; both Mann--Whitney $p<10^{-4}$). A model that learned
 ``deep\,$\Rightarrow$\,false positive'' on Kepler is therefore actively
 mis-oriented on TESS --- explaining why more data cannot close the gap and why a
 mission-agnostic SNR cut competes with it.
 
-\section{Disagreement as a triage signal}
+\section{ML $\times$ physics: agreement, and the limits of disagreement}
 The ML probability and the physics verdict are independent judgements. Crossing
 them yields four quadrants (Figure~\ref{fig:quad}, Table~\ref{tab:quad}).
-Agreement is the common, low-information case: both-say-planet is $74\%$ pure
-($[0.54,0.88]$) and both-say-FP is $71\%$ pure ($[0.58,0.81]$). \emph{Disagreement}
-concentrates the interesting objects. The ``ML-skeptical, physics-pass'' quadrant
-is large ($n=71$) and $61\%$ true planets ($[0.49,0.71]$), above the $50\%$ base
-rate: the Kepler-trained model, seeing weaker TESS signals, rejects planets that
-the mission-agnostic physics correctly passes. This quadrant alone holds $43$ of
-the $80$ true planets. Conversely ``ML-optimistic, physics-fail'' is planet-poor
-($38\%$), flagging false positives the score alone would admit.
+
+\paragraph{Agreement is strongly predictive (validated positive).}
+When both judgements agree, the answer is trustworthy: both-say-planet is $79\%$
+pure ($[0.68,0.87]$) and both-say-FP is $66\%$ pure in false positives
+($[0.59,0.72]$). In prevalence-independent terms a planet is $3.7\times$ more
+likely than a false positive to land in the both-agree-planet cell, and
+$0.52\times$ as likely in the both-agree-FP cell. The physics verdict carries real
+orthogonal signal on its own: it is significantly associated with the truth
+(Fisher odds ratio $2.5$, $p<10^{-3}$; \S8) and its five checks together reject
+$54\%$ of the false positives that the learned score would rank as planet-like.
+
+\paragraph{Disagreement is only weakly informative (honest negative).}
+It is tempting to read the off-diagonal cells as ``where the hidden planets are.''
+The data do not support a strong version of that claim. The large ``ML-skeptical,
+physics-pass'' quadrant ($n=217$) is $54\%$ planets ($[0.47,0.60]$) --- its
+interval includes the $50\%$ base rate, so it is at best marginally enriched
+($1.15\times$ lift). ``ML-optimistic, physics-fail'' is $55\%$ planets
+($[0.38,0.72]$), also indistinguishable from chance. In an earlier $160$-target
+sample the ML-skeptical cell looked cleanly enriched ($61\%$); that signal did not
+hold up. The honest conclusion is that \emph{agreement} between the two verdicts is
+what carries confidence, while \emph{disagreement} mostly marks genuinely
+ambiguous objects rather than a reservoir of mislabeled planets.
 
 \begin{table}[t]
 \centering
-\caption{ML\,$\times$\,physics quadrants on the TESS test set ($n=160$).
+\caption{ML\,$\times$\,physics quadrants on the TESS test set ($n=500$).
 Purity is planet fraction (FP fraction for the both-negative row), with $95\%$
-Wilson intervals.}
+Wilson intervals; lift is $P(\text{quadrant}\mid\text{planet})/P(\text{quadrant}\mid\text{FP})$,
+which is prevalence-independent.}
 \label{tab:quad}
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Quadrant & $n$ & Purity & 95\% CI \\
+Quadrant & $n$ & Purity & 95\% CI & Lift \\
 \midrule
-Both agree: planet            & 23 & 0.74 (planet) & $[0.54,0.88]$ \\
-Both agree: false positive    & 58 & 0.71 (FP)     & $[0.58,0.81]$ \\
-ML-optimistic (ML yes, phys no)& 8 & 0.38 (planet) & $[0.14,0.69]$ \\
-ML-skeptical (ML no, phys yes) & 71 & 0.61 (planet) & $[0.49,0.71]$ \\
+Both agree: planet            & 70  & 0.79 (planet) & $[0.68,0.87]$ & $3.67$ \\
+Both agree: false positive    & 184 & 0.66 (FP)     & $[0.59,0.72]$ & $0.52$ \\
+ML-optimistic (ML yes, phys no)& 29 & 0.55 (planet) & $[0.38,0.72]$ & $1.23$ \\
+ML-skeptical (ML no, phys yes) & 217 & 0.54 (planet) & $[0.47,0.60]$ & $1.15$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -233,50 +264,48 @@ give the count and true-planet purity per quadrant.}
 \label{fig:quad}
 \end{figure}
 
-\paragraph{Operationalizing it: follow-up efficiency.}
-If disagreement carries information, using it should spend follow-up time better.
+\paragraph{Does disagreement help follow-up? No, robustly.}
+If disagreement carried actionable information, a disagreement-aware ranking should
+recover planets under a limited follow-up budget faster than probability alone.
 Figure~\ref{fig:triage} plots true planets recovered against the fraction of
-targets observed, for four rankings. A physics-informed order (physics-pass first,
-then probability) dominates probability alone throughout the early- and
-mid-budget regime: its gain-curve area is $0.62$ vs.\ $0.59$ (random $0.50$,
-oracle $0.75$), and it recovers half of all planets after observing $33\%$ of
-targets vs.\ $39\%$ for probability alone. The improvement is modest but
-consistent, and largest exactly where budgets bite --- early. This is direct,
-operational evidence that the independent physics verdict, and the disagreement it
-encodes, is worth acting on.
+targets observed for four rankings. At $n=500$ the physics-informed orderings and
+ML probability are statistically indistinguishable (gain-curve areas
+$0.61$/$0.61$ vs.\ $0.61$; random $0.50$, oracle $0.75$). A modest advantage seen
+at $n=160$ did not replicate. We report this as a null result: incorporating the
+physics verdict into a follow-up ranking does not, on this benchmark, beat simply
+trusting the calibrated probability.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.62\linewidth]{triage_efficiency.png}
 \caption{Follow-up efficiency: cumulative true planets recovered vs.\ fraction of
-targets observed. Physics-informed rankings beat ML probability alone in the
-budget-limited regime.}
+targets observed. At $n=500$ the physics-informed and probability rankings
+coincide; both beat random and trail the oracle.}
 \label{fig:triage}
 \end{figure}
 
 \section{Ablations}
 Leave-one-group-out feature ablation (retraining on Kepler, testing on TESS) shows
-the SNR and shape features carry most of the transferable signal; dropping depth
-features slightly \emph{helps}, consistent with depth being the most
-mission-specific feature. A physics-check ablation on the TESS false positives
-shows the five checks together flag $57.5\%$ of them, with SDE and the odd/even
-test contributing most --- orthogonal rejection the learned score does not supply.
-Full tables are in \texttt{research/results/}.
+the shape features ($R_p/R_\star$, duration/period) carry the most transferable
+signal ($\Delta\text{AUC}=-0.057$ when dropped), followed by SNR ($-0.035$);
+dropping the depth features costs almost nothing ($-0.009$), consistent with depth
+being the most mission-specific feature. A physics-check ablation on the TESS false
+positives shows the five checks together flag $54\%$ of them, with the SDE
+($32\%$) and odd/even ($14\%$) tests contributing most --- orthogonal rejection the
+learned score does not supply. Full tables are in \texttt{research/results/}.
 
 \section{Validation}
 Several checks confirm the results are real rather than pipeline artifacts
 (Figure~\ref{fig:perm}). A permutation test --- shuffling the TESS labels
-$5000\times$ --- collapses the AUC to a null centered at $0.50$ ($[0.41,0.59]$),
-with the observed $0.68$ far outside it ($p=0$); the cross-mission signal is
-genuine. The physics-pass/label association is strong (Fisher exact odds ratio
-$4.1$, $p=5\times10^{-5}$), so the disagreement finding is not noise. For all
-$107$ period-recovered targets the TLS period matches the independent ExoFOP
-catalog period to within $3\%$ (median error $0.08\%$), confirming detections are
-real, not spurious. Training (Kepler KIC/KOI) and test (TESS TIC) target sets are
-disjoint by construction, precluding leakage. The one honest negative: the
-\emph{thresholded} ML prediction alone is only weakly associated with truth on
-TESS (Fisher $p=0.11$) --- precisely the transfer weakness the physics vetting
-compensates for.
+$5000\times$ --- collapses the AUC to a null centered at $0.50$ ($[0.45,0.55]$),
+with the observed $0.72$ far outside it ($p=0$); the cross-mission signal is
+genuine. Both verdicts are significantly associated with the truth (Fisher exact:
+physics-pass odds ratio $2.5$, $p<10^{-3}$; ML prediction odds ratio $3.1$,
+$p<10^{-3}$), so the quadrant structure is not noise. For all $350$
+period-recovered targets the TLS period matches the independent ExoFOP catalog
+period to within $3\%$ (median error $0.07\%$), confirming detections are real,
+not spurious. Training (Kepler KIC/KOI) and test (TESS TIC) target sets are
+disjoint by construction, precluding leakage.
 
 \begin{figure}[t]
 \centering
@@ -287,20 +316,27 @@ label-shuffled null distribution, so the signal is not a metric artifact.}
 \end{figure}
 
 \section{Discussion and limitations}
-Our benchmark uses single-sector TESS light curves for tractability, which
-lower-bounds detection performance; the three-sector experiment shows this helps
-detection but not ranking. The $160$-target benchmark yields broad confidence
-intervals; a larger sample would sharpen them. The 1D-CNN is trained on parametric
-folded views rather than raw pixels; a full AstroNet-style detector is future work.
-Injection hosts are screened for quietness but real correlated noise varies across
-the sky. The benchmark is class-balanced ($50/50$) by construction, so the
-quadrant purities are enrichments relative to a $50\%$ base rate; in the real,
-planet-rare TOI population absolute purities would be lower while the \emph{relative}
-ordering --- agreement pure, disagreement informative --- is what our claims rest
-on. None of these change the central message: a detection pipeline is best
-reported as a characterized decision system, and the disagreement between a
-learned score and independent physics is a resource worth spending telescope time
-on.
+The central message is methodological: a transit-detection pipeline is best
+reported as a \emph{characterized, validated decision system} --- a completeness
+map, a calibration curve, a cross-mission number with a confidence interval, and
+an explicit account of what does \emph{not} replicate --- rather than a single
+in-mission score. Two concrete, robust findings support acting on this: cross-mission
+transfer is severe ($0.96\!\rightarrow\!0.72$) with a diagnosable mechanism
+(feature-direction inversion), and independent physics vetting supplies real
+orthogonal false-positive rejection ($54\%$) that the learned score alone does not.
+Where two independent verdicts \emph{agree}, confidence is high; where they
+disagree, the object is genuinely ambiguous --- we found no evidence that
+disagreement hides a recoverable population of planets, and we report that
+negative honestly.
+
+Limitations: the benchmark uses single-sector light curves for tractability (a
+three-sector experiment improves detection but not ranking); the $500$-target size
+still yields intervals of $\pm0.05$ on the AUC; the 1D-CNN uses parametric folded
+views rather than raw pixels, leaving a full AstroNet-style detector to future
+work; injection hosts are screened for quietness though real correlated noise
+varies across the sky; and the class-balanced benchmark matches the dispositioned-TOI
+base rate ($\approx0.5$) but overstates purity for a rarer blind-search population,
+for which we report Bayes-adjusted values.
 
 \section{Reproducibility}
 Every figure and number regenerates from public archives:

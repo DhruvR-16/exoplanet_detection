@@ -2,33 +2,33 @@
   "models": [
     {
       "model": "SDE/SNR threshold (no ML)",
-      "auc": 0.6813,
-      "ap": 0.6825,
-      "brier": 0.2743
+      "auc": 0.641,
+      "ap": 0.6546,
+      "brier": 0.2855
     },
     {
       "model": "Logistic regression",
-      "auc": 0.5763,
-      "ap": 0.5515,
-      "brier": 0.2723
+      "auc": 0.642,
+      "ap": 0.61,
+      "brier": 0.2508
     },
     {
       "model": "Decision tree (depth 4)",
-      "auc": 0.6025,
-      "ap": 0.5655,
-      "brier": 0.3186
+      "auc": 0.6554,
+      "ap": 0.6135,
+      "brier": 0.2737
     },
     {
       "model": "MLP (32,16)",
-      "auc": 0.5078,
-      "ap": 0.5379,
-      "brier": 0.3904
+      "auc": 0.552,
+      "ap": 0.5684,
+      "brier": 0.3752
     },
     {
       "model": "RF+XGB ensemble (ours)",
-      "auc": 0.6588,
-      "ap": 0.6323,
-      "brier": 0.2786
+      "auc": 0.7096,
+      "ap": 0.6778,
+      "brier": 0.2564
     },
     {
       "model": "1D-CNN (folded views)",
@@ -41,70 +41,70 @@
     {
       "ablation": "full model",
       "features_used": 8,
-      "tess_auc": 0.6588,
+      "tess_auc": 0.7096,
       "delta_auc": 0.0
     },
     {
       "ablation": "drop shape (Rp/Rs, dur/P)",
       "features_used": 6,
-      "tess_auc": 0.6381,
-      "delta_auc": -0.0207
+      "tess_auc": 0.653,
+      "delta_auc": -0.0566
     },
     {
       "ablation": "drop signal (SNR)",
       "features_used": 7,
-      "tess_auc": 0.6245,
-      "delta_auc": -0.0343
+      "tess_auc": 0.6751,
+      "delta_auc": -0.0345
     },
     {
       "ablation": "drop depth (depth_ppm, log10_depth)",
       "features_used": 6,
-      "tess_auc": 0.668,
-      "delta_auc": 0.0092
+      "tess_auc": 0.7005,
+      "delta_auc": -0.0091
     },
     {
       "ablation": "drop period (period_days, log10_period)",
       "features_used": 6,
-      "tess_auc": 0.6556,
-      "delta_auc": -0.0032
+      "tess_auc": 0.699,
+      "delta_auc": -0.0106
     },
     {
       "ablation": "drop duration (duration_hrs)",
       "features_used": 7,
-      "tess_auc": 0.6611,
-      "delta_auc": 0.0023
+      "tess_auc": 0.7027,
+      "delta_auc": -0.0069
     }
   ],
   "physics_ablation": [
     {
       "check": "SDE >= 7",
-      "fp_flagged": 30,
-      "fp_flag_rate": 0.375
+      "fp_flagged": 79,
+      "fp_flag_rate": 0.316
     },
     {
       "check": "odd/even",
-      "fp_flagged": 14,
-      "fp_flag_rate": 0.175
+      "fp_flagged": 35,
+      "fp_flag_rate": 0.14
     },
     {
       "check": "duration",
-      "fp_flagged": 2,
-      "fp_flag_rate": 0.025
+      "fp_flagged": 9,
+      "fp_flag_rate": 0.036
     },
     {
       "check": "density",
-      "fp_flagged": 3,
-      "fp_flag_rate": 0.037
+      "fp_flagged": 9,
+      "fp_flag_rate": 0.036
     },
     {
       "check": "no secondary",
-      "fp_flagged": 8,
-      "fp_flag_rate": 0.1
+      "fp_flagged": 29,
+      "fp_flag_rate": 0.116
     },
     {
       "check": "ANY physics check",
-      "fp_flagged": 46,
-      "fp_flag_rate": 0.575
+      "fp_flagged": 134,
+      "fp_flag_rate": 0.536
     }
   ]
 }
