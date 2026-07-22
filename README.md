@@ -11,6 +11,8 @@
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.55-FF4B4B?logo=streamlit&logoColor=white)
 
+📄 **[Read the paper (PDF)](paper/paper.pdf)** — *How Well Does a Kepler-Trained Transit Classifier Transfer to TESS? A Characterization Study*
+
 <img src="docs/img/pipeline_phase_fold.png" alt="Phase-folded transit of TOI-270 with the fitted TLS model" width="720"/>
 
 *TOI-270 c recovered by the pipeline: a 3,732 ppm transit at P = 5.6604 d (SDE ≈ 40), with the TLS model overlaid.*
@@ -198,7 +200,7 @@ expoplanet_detection/
 │   ├── baselines.py       # Model comparison + feature/physics ablations
 │   ├── cnn_baseline.py    # 1D-CNN shape baseline
 │   └── run_all.py         # Reproduce the whole study
-├── paper/                 # LaTeX preprint draft (paper.tex)
+├── paper/                 # Preprint: paper.tex + compiled paper.pdf
 ├── docs/
 │   ├── metrics.json       # Held-out test metrics (written by train_model.py)
 │   └── img/               # Training, pipeline, and research figures
@@ -210,8 +212,9 @@ expoplanet_detection/
 ## 🔬 Research: characterizing the pipeline
 
 Beyond the working tool, [`research/`](research/) treats the pipeline as a
-**characterized, validated decision system** — the basis for a short paper
-([`paper/paper.tex`](paper/paper.tex)). The thesis: a detection pipeline should be
+**characterized, validated decision system** — written up as a paper:
+📄 **[paper.pdf](paper/paper.pdf)** (LaTeX source in [`paper/`](paper/)).
+The thesis: a detection pipeline should be
 reported not as one accuracy number but by *what it can detect*, *how it transfers
 across missions*, and *which claims survive a larger sample and a validation
 battery*. Every number below is on a **500-target labeled TESS benchmark** with
