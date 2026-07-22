@@ -15,7 +15,7 @@
 
 \title{\textbf{How Well Does a Kepler-Trained Transit Classifier Transfer to
 TESS? A Characterization Study}}
-\author{Dhruv R.\\ \small Preprint draft --- all numbers regenerate via \texttt{python -m research.run\_all}}
+\author{Dhruv Ramani}
 \date{\today}
 
 \begin{document}
@@ -45,8 +45,8 @@ enriched) and physics vetting independently rejects $54\%$ of false positives --
 but we test and report an honest negative: their \emph{disagreement} does not
 robustly identify extra planets, and a physics-informed follow-up ranking shows no
 reliable advantage over probability alone at this sample size. Every claim carries
-a bootstrap or permutation-based interval, and the whole study reproduces from
-public archives with one command.
+a bootstrap or permutation-based interval, and the whole study reproduces
+end-to-end from public archives.
 \end{abstract}
 
 \section{Introduction}
@@ -74,8 +74,8 @@ positive result (agreement is strongly predictive; physics adds orthogonal
 false-positive rejection) and an honest negative one (disagreement does not
 robustly surface extra planets, and physics-informed triage shows no reliable
 gain); and (4) a validation battery --- permutation test, association tests, and a
-catalog cross-check --- confirming the results are not artifacts. Every figure and
-number regenerates from public archives with one command.
+catalog cross-check --- confirming the results are not artifacts. Every figure
+and number regenerates end-to-end from public archives.
 
 A note on scope: we deliberately report what does \emph{not} replicate. Two
 tentative effects visible at a $160$-target sample --- a physical SNR cut beating
@@ -105,7 +105,7 @@ SDE $<8$), so the injected signal is the only transit present ($336$ injections
 across three hosts).
 
 \section{Methods}
-The pipeline (\texttt{pipeline.py}) fetches SPOC light curves (with a TESScut
+The pipeline fetches SPOC light curves (with a TESScut
 full-frame-image fallback), detrends stellar variability with a Tukey biweight
 filter, bins gap-aware to 10-minute cadence, and runs Transit Least Squares
 \cite{hippke2019tls} with stellar priors from the TIC. From the TLS solution we
@@ -162,7 +162,7 @@ excludes both chance ($0.5$) and the in-mission value, so the transfer drop is
 large and robust. Class separation exists but is much weaker than in-mission: this
 is what a headline same-mission AUC hides.
 
-\paragraph{The ensemble still beats simpler models.}
+\paragraph{Comparison with simpler models.}
 Figure~\ref{fig:baselines} compares, under an identical Kepler-train /
 TESS-test protocol, an SDE/SNR threshold, logistic regression, a shallow tree, an
 MLP, our ensemble, and a 1D-CNN on parametric folded views. The ensemble is the
@@ -172,7 +172,7 @@ strongest cross-mission (AUC $0.71$), ahead of the tree ($0.66$), logistic
 ensemble; that apparent tie did not survive the larger benchmark --- a concrete
 example of why sample size and confidence intervals matter here.)
 
-\paragraph{Does more data close the gap?}
+\paragraph{Effect of additional sectors.}
 Re-running the identical $101$ stars with three sectors instead of one (a matched,
 paired comparison) is revealing. Period recovery rises by $+0.069$
 ($[0.000,0.139]$), the Brier score improves by $-0.040$ ($[-0.087,0.006]$), and
@@ -181,9 +181,9 @@ is unchanged, $\Delta\text{AUC}=+0.001$ ($[-0.068,0.067]$). The detection and
 calibration gains are suggestive but not significant at this sample size; the null
 effect on \emph{ranking} is the robust result. More data buys detection and
 calibration, not cross-mission separability: the Kepler$\rightarrow$TESS gap is a
-distribution-shift problem, not merely a signal-to-noise one. (Three-sector
-fetches also failed for $\sim\!37\%$ of targets on flaky archive connections, a
-practical cost of the extra data.)
+distribution-shift problem, not merely a signal-to-noise one. (Multi-sector
+retrieval also failed for $\sim\!37\%$ of targets owing to intermittent archive
+availability, a practical cost of the extra data.)
 
 \begin{figure}[t]
 \centering
@@ -197,12 +197,12 @@ test set: separability drops and probabilities decalibrate relative to Kepler.}
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.62\linewidth]{baselines_auc.png}
-\caption{Cross-mission ROC-AUC on TESS by model (Kepler-trained). No learned model
-beats the one-parameter physical SNR cut; the dotted line marks chance.}
+\caption{Cross-mission ROC-AUC on TESS by model (Kepler-trained). The calibrated
+ensemble is the strongest transfer model; the dotted line marks chance.}
 \label{fig:baselines}
 \end{figure}
 
-\paragraph{A concrete mechanism.}
+\paragraph{Mechanism of the transfer gap.}
 The transfer gap is not a hand-wave: the \emph{separating direction} of the depth
 and radius features inverts between the two populations. In the Kepler training
 set deep transits skew toward eclipsing-binary false positives; in the TESS TOI
@@ -217,17 +217,17 @@ mission-agnostic SNR cut competes with it.
 The ML probability and the physics verdict are independent judgements. Crossing
 them yields four quadrants (Figure~\ref{fig:quad}, Table~\ref{tab:quad}).
 
-\paragraph{Agreement is strongly predictive (validated positive).}
+\paragraph{Agreement is strongly predictive.}
 When both judgements agree, the answer is trustworthy: both-say-planet is $79\%$
 pure ($[0.68,0.87]$) and both-say-FP is $66\%$ pure in false positives
 ($[0.59,0.72]$). In prevalence-independent terms a planet is $3.7\times$ more
 likely than a false positive to land in the both-agree-planet cell, and
 $0.52\times$ as likely in the both-agree-FP cell. The physics verdict carries real
 orthogonal signal on its own: it is significantly associated with the truth
-(Fisher odds ratio $2.5$, $p<10^{-3}$; \S8) and its five checks together reject
+(Fisher odds ratio $2.5$, $p<10^{-3}$; \S\ref{sec:validation}) and its five checks together reject
 $54\%$ of the false positives that the learned score would rank as planet-like.
 
-\paragraph{Disagreement is only weakly informative (honest negative).}
+\paragraph{Disagreement is only weakly informative.}
 It is tempting to read the off-diagonal cells as ``where the hidden planets are.''
 The data do not support a strong version of that claim. The large ``ML-skeptical,
 physics-pass'' quadrant ($n=217$) is $54\%$ planets ($[0.47,0.60]$) --- its
@@ -266,7 +266,7 @@ give the count and true-planet purity per quadrant.}
 \label{fig:quad}
 \end{figure}
 
-\paragraph{Does disagreement help follow-up? No, robustly.}
+\paragraph{Disagreement does not improve follow-up efficiency.}
 If disagreement carried actionable information, a disagreement-aware ranking should
 recover planets under a limited follow-up budget faster than probability alone.
 Figure~\ref{fig:triage} plots true planets recovered against the fraction of
@@ -294,9 +294,10 @@ dropping the depth features costs almost nothing ($-0.009$), consistent with dep
 being the most mission-specific feature. A physics-check ablation on the TESS false
 positives shows the five checks together flag $54\%$ of them, with the SDE
 ($32\%$) and odd/even ($14\%$) tests contributing most --- orthogonal rejection the
-learned score does not supply. Full tables are in \texttt{research/results/}.
+learned score does not supply. Full ablation tables accompany the released code.
 
 \section{Validation}
+\label{sec:validation}
 Several checks confirm the results are real rather than pipeline artifacts
 (Figure~\ref{fig:perm}). A permutation test --- shuffling the TESS labels
 $5000\times$ --- collapses the AUC to a null centered at $0.50$ ($[0.45,0.55]$),
@@ -340,11 +341,11 @@ varies across the sky; and the class-balanced benchmark matches the dispositione
 base rate ($\approx0.5$) but overstates purity for a rarer blind-search population,
 for which we report Bayes-adjusted values.
 
-\section{Reproducibility}
-Every figure and number regenerates from public archives:
-\begin{center}\texttt{python -m research.run\_all}\end{center}
-Code, the trained model, and result tables (with the exact values quoted here) are
-in the repository; heavy stages are resumable.
+\section*{Data and code availability}
+Every figure and number in this paper regenerates end-to-end from public archives
+(NASA Exoplanet Archive, MAST, ExoFOP). The full pipeline, trained model, benchmark
+tables, and analysis code are openly available at
+\url{https://github.com/DhruvR-16/exoplanet_detection}.
 
 \begin{thebibliography}{9}
 \bibitem{shallue2018} Shallue, C.~J. \& Vanderburg, A. (2018). Identifying
