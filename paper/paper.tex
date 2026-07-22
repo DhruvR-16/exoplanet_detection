@@ -5,6 +5,7 @@
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{amsmath}
+\usepackage{amssymb}
 \usepackage{siunitx}
 \usepackage[hidelinks]{hyperref}
 \usepackage{caption}
@@ -51,11 +52,11 @@ public archives with one command.
 The transiting-exoplanet literature has converged on supervised classifiers that
 map light curves or hand-built features to a planet/false-positive label, and
 report their success as an accuracy or ROC-AUC on a held-out set drawn from the
-\emph{same} mission \citep{shallue2018,exominer2021}. Such a number answers
+\emph{same} mission \cite{shallue2018,exominer2021}. Such a number answers
 ``how separable is my test set?'' but not the questions a survey actually asks:
 \emph{what can this pipeline detect}, \emph{does it work on data it was not
 trained on}, and \emph{where should a human look?} Recent work adds probability
-calibration and multimodal inputs \citep{exonet2026} but still frames the output
+calibration and multimodal inputs \cite{exonet2026} but still frames the output
 as a single vetting score.
 
 We take a different stance: the output of a detection pipeline should be a
@@ -106,7 +107,7 @@ across three hosts).
 The pipeline (\texttt{pipeline.py}) fetches SPOC light curves (with a TESScut
 full-frame-image fallback), detrends stellar variability with a Tukey biweight
 filter, bins gap-aware to 10-minute cadence, and runs Transit Least Squares
-\citep{hippke2019tls} with stellar priors from the TIC. From the TLS solution we
+\cite{hippke2019tls} with stellar priors from the TIC. From the TLS solution we
 extract eight physical features --- period, transit depth (ppm), duration (hr),
 model SNR, $R_p/R_\star$, and log/ratio transforms --- in units matched to the KOI
 catalog, avoiding train/serve skew. A soft-voting RandomForest\,+\,XGBoost
