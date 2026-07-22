@@ -1,0 +1,103 @@
+{
+  "n_boot": 2000,
+  "tess_auc_s1": {
+    "auc": 0.6764,
+    "ci_low": 0.5928,
+    "ci_high": 0.7547
+  },
+  "base_rate_s1": 0.5,
+  "quadrant_purity_s1": [
+    {
+      "quadrant": "Both agree: PLANET",
+      "metric": "planet_purity",
+      "n": 23,
+      "purity": 0.739,
+      "ci_low": 0.535,
+      "ci_high": 0.875
+    },
+    {
+      "quadrant": "Both agree: false positive",
+      "metric": "fp_purity",
+      "n": 58,
+      "purity": 0.707,
+      "ci_low": 0.58,
+      "ci_high": 0.808
+    },
+    {
+      "quadrant": "ML-optimistic (ML yes, physics no)",
+      "metric": "planet_purity",
+      "n": 8,
+      "purity": 0.375,
+      "ci_low": 0.137,
+      "ci_high": 0.694
+    },
+    {
+      "quadrant": "ML-skeptical (ML no, physics yes)",
+      "metric": "planet_purity",
+      "n": 71,
+      "purity": 0.606,
+      "ci_low": 0.489,
+      "ci_high": 0.711
+    }
+  ],
+  "tess_auc_s3": {
+    "auc": 0.6969,
+    "ci_low": 0.5829,
+    "ci_high": 0.7999
+  },
+  "quadrant_purity_s3": [
+    {
+      "quadrant": "Both agree: PLANET",
+      "metric": "planet_purity",
+      "n": 30,
+      "purity": 0.7,
+      "ci_low": 0.521,
+      "ci_high": 0.833
+    },
+    {
+      "quadrant": "Both agree: false positive",
+      "metric": "fp_purity",
+      "n": 27,
+      "purity": 0.704,
+      "ci_low": 0.515,
+      "ci_high": 0.841
+    },
+    {
+      "quadrant": "ML-optimistic (ML yes, physics no)",
+      "metric": "planet_purity",
+      "n": 7,
+      "purity": 0.571,
+      "ci_low": 0.25,
+      "ci_high": 0.842
+    },
+    {
+      "quadrant": "ML-skeptical (ML no, physics yes)",
+      "metric": "planet_purity",
+      "n": 37,
+      "purity": 0.541,
+      "ci_low": 0.384,
+      "ci_high": 0.69
+    }
+  ],
+  "matched_n": 101,
+  "sector_delta": {
+    "period_recovery": {
+      "delta": 0.0693,
+      "ci_low": 0.0,
+      "ci_high": 0.1386,
+      "excludes_zero": false
+    },
+    "brier": {
+      "delta": -0.04,
+      "ci_low": -0.0872,
+      "ci_high": 0.0061,
+      "excludes_zero": false
+    },
+    "auc": {
+      "delta": 0.0008,
+      "ci_low": -0.0678,
+      "ci_high": 0.0671,
+      "excludes_zero": false
+    }
+  }
+}

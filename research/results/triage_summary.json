@@ -1,0 +1,29 @@
+{
+  "n_targets": 160,
+  "n_planets": 80,
+  "ML probability": {
+    "gain_auc": 0.5913,
+    "budget_to_50pct_planets": 0.388,
+    "budget_to_80pct_planets": 0.669
+  },
+  "Physics-informed (ML+physics)": {
+    "gain_auc": 0.6068,
+    "budget_to_50pct_planets": 0.356,
+    "budget_to_80pct_planets": 0.656
+  },
+  "Physics-pass first, then ML": {
+    "gain_auc": 0.6191,
+    "budget_to_50pct_planets": 0.331,
+    "budget_to_80pct_planets": 0.662
+  },
+  "Oracle (true label)": {
+    "gain_auc": 0.7531,
+    "budget_to_50pct_planets": 0.25,
+    "budget_to_80pct_planets": 0.4
+  },
+  "Random": {
+    "gain_auc": 0.5044,
+    "budget_to_50pct_planets": 0.5,
+    "budget_to_80pct_planets": 0.8
+  }
+}

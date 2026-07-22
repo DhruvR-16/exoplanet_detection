@@ -253,12 +253,18 @@ information. Crossing them into four quadrants (n = 160):
 
 <img src="docs/img/disagreement_quadrants.png" alt="ML-physics disagreement quadrants" width="600"/>
 
-Agreement is purest (both-say-planet → 74% real planets; both-say-FP → 71% real
-FPs), but the **"ML-skeptical, physics-pass" quadrant holds 43 real planets — over
-half of all planets in the set — that the Kepler-trained ML rejects and the
-mission-agnostic physics rescues.** We propose ranking scarce follow-up by
-disagreement rather than by probability alone. Physics checks independently reject
-57.5% of the false positives.
+Agreement is purest (both-say-planet → 74% real planets, 95% CI [0.54, 0.88];
+both-say-FP → 71% real FPs), but the **"ML-skeptical, physics-pass" quadrant holds
+43 real planets — over half of all planets in the set — that the Kepler-trained ML
+rejects and the mission-agnostic physics rescues** (61% purity, [0.49, 0.71], above
+the 50% base rate). Physics checks independently reject 57.5% of the false positives.
+
+**Does it help follow-up?** Ranking targets by a physics-informed score (physics-pass
+first, then probability) recovers planets more efficiently than ML probability alone
+— gain-curve area 0.62 vs 0.59, and half the planets after observing 33% of targets
+vs 39% — direct operational evidence that the disagreement signal is worth acting on.
+
+<img src="docs/img/triage_efficiency.png" alt="Follow-up efficiency curve" width="520"/>
 
 > Full method, caveats, and reproduction steps: [`research/README.md`](research/README.md).
 > Numbers regenerate from public archives; heavy stages are resumable.

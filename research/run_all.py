@@ -53,6 +53,8 @@ def main() -> None:
     stage("Disagreement triage", ["disagreement"])
     stage("Baselines + ablations", ["baselines"])
     stage("1D-CNN baseline", ["cnn_baseline", "--epochs", "40"])
+    stage("Bootstrap confidence intervals", ["statistics"])
+    stage("Triage efficiency", ["triage"])
     print("\n✅ Full study reproduced. See research/results/ and docs/img/.", flush=True)
 
 
