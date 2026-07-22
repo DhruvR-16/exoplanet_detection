@@ -5,5 +5,54 @@
   "agree_planet_purity_when_both_yes": 0.739,
   "agree_fp_purity_when_both_no": 0.707,
   "disagree_ml_optimistic_planet_purity": 0.375,
-  "disagree_ml_skeptical_planet_purity": 0.606
+  "disagree_ml_skeptical_planet_purity": 0.606,
+  "base_rate_adjusted": {
+    "prevalences": [
+      0.497,
+      0.25,
+      0.1
+    ],
+    "quadrants": [
+      {
+        "quadrant": "Both agree: PLANET",
+        "p_given_planet": 0.212,
+        "p_given_fp": 0.075,
+        "purity_by_prevalence": {
+          "pi_0.497": 0.737,
+          "pi_0.25": 0.486,
+          "pi_0.1": 0.239
+        }
+      },
+      {
+        "quadrant": "Both agree: false positive",
+        "p_given_planet": 0.212,
+        "p_given_fp": 0.512,
+        "purity_by_prevalence": {
+          "pi_0.497": 0.291,
+          "pi_0.25": 0.121,
+          "pi_0.1": 0.044
+        }
+      },
+      {
+        "quadrant": "ML-optimistic (ML yes, physics no)",
+        "p_given_planet": 0.037,
+        "p_given_fp": 0.062,
+        "purity_by_prevalence": {
+          "pi_0.497": 0.372,
+          "pi_0.25": 0.167,
+          "pi_0.1": 0.062
+        }
+      },
+      {
+        "quadrant": "ML-skeptical (ML no, physics yes)",
+        "p_given_planet": 0.537,
+        "p_given_fp": 0.35,
+        "purity_by_prevalence": {
+          "pi_0.497": 0.603,
+          "pi_0.25": 0.339,
+          "pi_0.1": 0.146
+        }
+      }
+    ]
+  }
 }

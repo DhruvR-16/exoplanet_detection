@@ -69,6 +69,38 @@ def load_benchmark() -> pd.DataFrame:
     return df
 
 
+def base_rate_analysis(df: pd.DataFrame, prevalences=(0.497, 0.25, 0.10)) -> dict:
+    """Prevalence-adjusted quadrant purity.
+
+    The benchmark is class-balanced, but purity (precision) depends on the base
+    rate. We report the *prevalence-independent* class-conditional rates
+    P(quadrant | planet) and P(quadrant | FP), then Bayes-adjust purity to
+    several deployment prevalences:
+        P(planet | q) = pi * P(q|planet) / [pi*P(q|planet) + (1-pi)*P(q|FP)]
+    pi = 0.497 is the real dispositioned-TOI base rate (ExoFOP CP/KP vs FP/FA);
+    lower values illustrate a blind search where planets are rarer.
+    """
+    n_planet = int((df["label"] == 1).sum())
+    n_fp = int((df["label"] == 0).sum())
+    out = {"prevalences": list(prevalences), "quadrants": []}
+    for key, name in QUADRANTS.items():
+        sub = df[df["quadrant"] == key]
+        p_given_planet = (sub["label"] == 1).sum() / n_planet if n_planet else 0.0
+        p_given_fp = (sub["label"] == 0).sum() / n_fp if n_fp else 0.0
+        purities = {}
+        for pi in prevalences:
+            num = pi * p_given_planet
+            den = num + (1 - pi) * p_given_fp
+            purities[f"pi_{pi}"] = round(num / den, 3) if den > 0 else None
+        out["quadrants"].append({
+            "quadrant": name,
+            "p_given_planet": round(float(p_given_planet), 3),
+            "p_given_fp": round(float(p_given_fp), 3),
+            "purity_by_prevalence": purities,
+        })
+    return out
+
+
 def quadrant_table(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for key, name in QUADRANTS.items():
@@ -159,6 +191,7 @@ def main() -> None:
         "agree_fp_purity_when_both_no": _purity(df, (0, 0), want_fp=True),
         "disagree_ml_optimistic_planet_purity": _purity(df, (1, 0)),
         "disagree_ml_skeptical_planet_purity": _purity(df, (0, 1)),
+        "base_rate_adjusted": base_rate_analysis(df),
     }
     (RESULTS_DIR / f"disagreement_summary{FIG_SUFFIX}.json").write_text(json.dumps(summary, indent=2))
     logger.info("Summary: %s", json.dumps(summary, indent=2))
