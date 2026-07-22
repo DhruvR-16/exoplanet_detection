@@ -1,0 +1,9 @@
+{
+  "n_total": 101,
+  "n_agree": 57,
+  "n_disagree": 44,
+  "agree_planet_purity_when_both_yes": 0.7,
+  "agree_fp_purity_when_both_no": 0.704,
+  "disagree_ml_optimistic_planet_purity": 0.571,
+  "disagree_ml_skeptical_planet_purity": 0.541
+}

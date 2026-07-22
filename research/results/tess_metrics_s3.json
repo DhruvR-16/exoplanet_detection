@@ -1,0 +1,10 @@
+{
+  "n_targets_attempted": 160,
+  "n_success": 101,
+  "n_planet": 53,
+  "n_false_positive": 48,
+  "tess_roc_auc": 0.6969,
+  "tess_pr_auc": 0.6681,
+  "tess_brier": 0.2859,
+  "kepler_cv_roc_auc": 0.964
+}

@@ -132,6 +132,17 @@ recovers the true period in only $\sim\!67\%$ of single-sector light curves;
 transfer gap is therefore substantially a detection-domain-shift effect --- a
 distinction invisible to a single-number report.
 
+\paragraph{Does more data close the gap?} Re-running the identical 101 stars with
+three sectors instead of one (a matched comparison) is revealing:
+period recovery rises ($0.68\!\rightarrow\!0.75$), calibration improves
+(Brier $0.33\!\rightarrow\!0.29$), and the model's mean probability on true
+planets climbs ($0.33\!\rightarrow\!0.45$) --- yet ranking is \emph{unchanged}
+(ROC-AUC $0.70$ either way). More data therefore buys detection and calibration
+but not cross-mission \emph{separability}: the Kepler$\rightarrow$TESS gap is a
+distribution-shift problem, not merely a signal-to-noise one that more sectors
+resolve. (Multi-sector fetches also failed for $\sim\!37\%$ of targets on flaky
+archive connections, a practical cost of the extra data.)
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.49\linewidth]{tess_roc.png}

@@ -240,6 +240,13 @@ structure. This is the finding a headline in-mission AUC hides.
 | Logistic regression | 0.576 |
 | MLP | 0.508 |
 
+*Does more data help?* Re-running the identical stars at **3 sectors** instead of 1
+lifts detection (period recovery 0.68 → 0.75) and calibration (Brier 0.33 → 0.29)
+and raises the model's confidence on real planets (0.33 → 0.45), but **ranking
+stays flat (AUC ≈ 0.70)** — the cross-mission gap is a distribution-shift problem,
+not a signal-to-noise one that more sectors resolve. (Regenerate with
+`python -m research.tess_benchmark --limit 160 --max-sectors 3 --tag s3`.)
+
 **3 · Disagreement as a triage signal (headline).** The calibrated ML score and
 the 5-check physics verdict are *independent*, so their disagreement is
 information. Crossing them into four quadrants (n = 160):
