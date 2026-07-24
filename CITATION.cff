@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+title: >-
+  How Well Does a Kepler-Trained Transit Classifier Transfer to TESS?
+  A Characterization Study
+message: >-
+  If you use this software or the accompanying study, please cite it
+  using the metadata below.
+type: software
+authors:
+  - given-names: Dhruv
+    family-names: Ramani
+repository-code: 'https://github.com/DhruvR-16/exoplanet_detection'
+url: 'https://github.com/DhruvR-16/exoplanet_detection'
+abstract: >-
+  A physics-informed machine-learning pipeline for detecting transiting
+  exoplanets in TESS photometry (Transit Least Squares, eight physical
+  features, a calibrated RandomForest+XGBoost ensemble, and five orthogonal
+  physics-vetting checks), together with a characterization study of its
+  Kepler-to-TESS cross-mission transfer on a 500-target labeled benchmark.
+keywords:
+  - exoplanets
+  - transit photometry
+  - TESS
+  - machine learning
+  - cross-mission transfer
+  - astronomy
+# Add a license (e.g. `license: MIT`) once a LICENSE file is in the repo.
+# When you mint a Zenodo DOI (see below), add it here as:
+# doi: 10.5281/zenodo.XXXXXXX
