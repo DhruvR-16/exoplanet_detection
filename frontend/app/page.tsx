@@ -404,7 +404,7 @@ export default function Home() {
     }
   }
 
-  const chartOptionsScatter = {
+  const getChartOptions = (xTitle: string, yTitle: string = 'Relative Flux') => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -423,15 +423,15 @@ export default function Home() {
       x: {
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
         ticks: { color: '#94a3b8' },
-        title: { display: true, text: 'Phase / Time', color: '#94a3b8' }
+        title: { display: true, text: xTitle, color: '#94a3b8' }
       },
       y: {
         grid: { color: 'rgba(255, 255, 255, 0.05)' },
         ticks: { color: '#94a3b8' },
-        title: { display: true, text: 'Relative Flux', color: '#94a3b8' }
+        title: { display: true, text: yTitle, color: '#94a3b8' }
       }
     }
-  }
+  })
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 pb-16">
@@ -751,16 +751,16 @@ export default function Home() {
               {/* Chart Render Window */}
               <div className="h-[420px] w-full relative">
                 {activeTab === 'folded' && (
-                  <Scatter data={buildFoldedChartData()} options={chartOptionsScatter} />
+                  <Scatter data={buildFoldedChartData()} options={getChartOptions('Orbital Phase (-0.5 to +0.5)', 'Relative Flux')} />
                 )}
                 {activeTab === 'time' && (
-                  <Scatter data={buildTimeSeriesChartData()} options={chartOptionsScatter} />
+                  <Scatter data={buildTimeSeriesChartData()} options={getChartOptions('Time (BTJD days)', 'Normalized Flux')} />
                 )}
                 {activeTab === 'periodogram' && (
-                  <Line data={buildPeriodogramChartData()} options={chartOptionsScatter} />
+                  <Line data={buildPeriodogramChartData()} options={getChartOptions('Trial Period (days)', 'Signal Detection Efficiency (SDE)')} />
                 )}
                 {activeTab === 'oddeven' && (
-                  <Scatter data={buildOddEvenChartData()} options={chartOptionsScatter} />
+                  <Scatter data={buildOddEvenChartData()} options={getChartOptions('Phase around Transit Mid-point', 'Detrended Flux')} />
                 )}
                 {activeTab === 'features' && (
                   <Bar

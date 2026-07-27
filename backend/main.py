@@ -94,7 +94,12 @@ def analyze_target(req: AnalysisRequest) -> dict[str, Any]:
         logger.exception("Pipeline failed for %s", req.target_star)
         raise HTTPException(status_code=500, detail=f"Pipeline error: {exc}") from exc
 
-    pred = result["prediction"]
+    pred = result.get("prediction") or {
+        "prediction": 0,
+        "probability": 0.5,
+        "confidence": "Low",
+        "result_text": "No Model Prediction",
+    }
     arrays = result["arrays"]
     time_arr = arrays["time"]
     tls = result["tls"]
