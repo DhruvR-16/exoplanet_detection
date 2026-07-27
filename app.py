@@ -250,7 +250,7 @@ if analyze_button and target_star:
     # --- Plots --------------------------------------------------------------
     st.markdown("---")
     st.subheader("Lightcurve Visualizations")
-    tab1, tab2, tab3 = st.tabs(["Raw & Detrended Flux", "Phase-Folded Transit", "TLS Periodogram"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Raw & Detrended Flux", "Phase-Folded Transit", "TLS Periodogram", "Odd vs Even Transits"])
 
     with tab1:
         fig1, ax1 = dark_fig((12, 4))
@@ -293,6 +293,25 @@ if analyze_button and target_star:
             st.pyplot(fig3)
         else:
             st.info("Periodogram unavailable.")
+
+    with tab4:
+        if period > 0:
+            fig4, ax4 = dark_fig((10, 4))
+            phase = pipeline._fold_phase(time_arr, period, t0)
+            transit_num = np.round((time_arr - t0) / period)
+            in_range = np.abs(phase) <= 0.15
+            odd_m = in_range & (transit_num % 2 == 1)
+            even_m = in_range & (transit_num % 2 == 0)
+
+            ax4.plot(phase[odd_m], flat_flux[odd_m], ".", color="#818cf8", alpha=0.6, markersize=3, label="Odd transits")
+            ax4.plot(phase[even_m], flat_flux[even_m], ".", color="#34d399", alpha=0.6, markersize=3, label="Even transits")
+            ax4.set_xlabel("Phase around transit mid-point")
+            ax4.set_ylabel("Detrended flux")
+            ax4.legend(loc="lower right", facecolor="#1e2532", labelcolor="white")
+            ax4.set_title(f"Odd vs Even Transits (Welch p = {welch_p:.3f})")
+            st.pyplot(fig4)
+        else:
+            st.info("Odd/even transit comparison unavailable.")
 
     # --- Feature tables -----------------------------------------------------
     st.markdown("---")
