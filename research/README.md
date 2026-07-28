@@ -22,6 +22,8 @@ imports the pipeline and studies its behavior.
 | `cnn_baseline.py` | 1D-CNN on parametric folded views (shape-vs-scalar) | `results/cnn_baseline.json`, `docs/img/cnn_views.png` |
 | `statistics.py` | Bootstrap AUC CIs, Wilson purity CIs, paired sector deltas | `results/statistics.json`, `docs/img/quadrant_purity_ci.png` |
 | `triage.py` | Follow-up efficiency: physics-informed vs ML-probability ranking | `results/triage_summary.json`, `docs/img/triage_efficiency.png` |
+| `error_analysis.py` | Failure modes + operating-point diagnosis and fix | `results/error_analysis.json`, `docs/img/error_analysis.png` |
+| `adaptation.py` | Physics-anchored self-training (label-free domain adaptation) | `results/adaptation.json`, `docs/img/adaptation.png` |
 | `run_all.py` | Orchestrates the whole study | all of the above |
 | `theme.py` | Shared dark-mode figure styling | — |
 

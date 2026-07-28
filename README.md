@@ -272,7 +272,29 @@ features (AUC 0.703 → 0.699) and fusing physics flags with the ML score
 (ΔAUC +0.005, CI [−0.015, +0.023]). The recoverable gain was in the decision
 rule, not the feature set. Reproduce with `python -m research.error_analysis`.
 
-**4 · ML × physics: agreement works, disagreement doesn't (honest result).** The
+**4 · Physics-anchored self-training — label-free cross-mission adaptation.** The
+5 physics checks are *mission-agnostic* (transit geometry, not anything learned
+from Kepler), so they can supervise adaptation to a new mission **using zero true
+labels**. Pseudo-labels come from physics alone; true labels are used only to
+score the result:
+
+| Model (out-of-fold, TESS) | ROC-AUC | |
+| :--- | :---: | :--- |
+| Physics alone (the supervisor) | 0.602 | |
+| **Physics-anchored adapted** | **0.672** | **+0.070 [0.025, 0.116] — beats its own supervisor** |
+| Kepler-trained ML (7,325 labels) | 0.719 | −0.046 [−0.098, +0.011] — *statistical parity* |
+
+<img src="docs/img/adaptation.png" alt="Physics-anchored self-training results" width="820"/>
+
+With **no labels at all** it reaches parity with a model trained on 7,325 labeled
+examples — useful when a new mission has no labeled data yet. And where it wins is
+mechanistically predicted: **+0.137 AUC on deep transits (>20k ppm)**, exactly
+where the Kepler prior "deep ⇒ FP" is inverted, while losing where Kepler is
+already well-oriented. A depth-gated hybrid did **not** convert this into a
+significant overall gain (+0.002, CI [−0.025, +0.030]) — reported as a null.
+Reproduce with `python -m research.adaptation`.
+
+**5 · ML × physics: agreement works, disagreement doesn't (honest result).** The
 calibrated ML score and the 5-check physics verdict are *independent*. Crossing
 them into four quadrants (n = 500):
 
@@ -290,7 +312,7 @@ saying what survives is the point.
 
 <img src="docs/img/quadrant_purity_ci.png" alt="Quadrant purity with confidence intervals" width="560"/>
 
-**5 · Validation (not hallucinating).** A [validation battery](research/validate.py)
+**6 · Validation (not hallucinating).** A [validation battery](research/validate.py)
 confirms the results are real: a label-permutation test collapses the AUC to a null
 centered at 0.50 with the observed 0.72 far outside (**p = 0**); both verdicts are
 significantly associated with truth (Fisher p < 10⁻³); and **350/350** recovered TLS

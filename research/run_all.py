@@ -58,6 +58,7 @@ def main() -> None:
     stage("Triage efficiency", ["triage"])
     stage("Validation audit", ["validate"])
     stage("Error analysis", ["error_analysis"])
+    stage("Physics-anchored adaptation", ["adaptation"])
     print("\n✅ Full study reproduced. See research/results/ and docs/img/.", flush=True)
 
 

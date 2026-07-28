@@ -46,7 +46,12 @@ planet with $P<2$\,d and every one deeper than $20{,}000$\,ppm, precisely TESS's
 most characteristic detections. A cross-validated threshold of $0.117$ (identical
 in every fold) raises recall to $0.72$ and $F_1$ from $0.41$ to $0.70$, while
 retraining without the inverting features does not help at all. (iv)
-\textbf{ML $\times$ physics}: the two independent verdicts \emph{agree}
+\textbf{Physics-anchored self-training}: because the physics checks are
+mission-agnostic, they can supervise adaptation with \emph{no TESS labels at
+all}; the resulting model beats the physics rule that supervised it
+($+0.070$, $[0.025,0.116]$), reaches parity with the Kepler-trained ensemble, and
+wins by $+0.137$ precisely in the deep-transit regime where the Kepler prior is
+inverted. (v) \textbf{ML $\times$ physics}: the two independent verdicts \emph{agree}
 informatively --- both-agree-planet is $79\%$ pure ($[0.68,0.87]$, $3.7\times$
 enriched) and physics vetting independently rejects $54\%$ of false positives ---
 but we test and report an honest negative: their \emph{disagreement} does not
@@ -79,7 +84,10 @@ Kepler$\rightarrow$TESS transfer, with a concrete distribution-shift mechanism;
 (3) the finding that the \emph{decision threshold}, not the model, dominates the
 practical cost of that shift --- with two subgroups rendered wholly invisible by
 the conventional cut, and two model-level remedies shown not to help;
-(4) an analysis of the ML--physics agreement structure, including a validated
+(4) \emph{physics-anchored self-training}, a label-free adaptation method that
+uses the mission-agnostic physics verdict as its own supervision and is
+correctly oriented exactly where the transferred model is not;
+(5) an analysis of the ML--physics agreement structure, including a validated
 positive result (agreement is strongly predictive; physics adds orthogonal
 false-positive rejection) and an honest negative one (disagreement does not
 robustly surface extra planets, and physics-informed triage shows no reliable
@@ -300,6 +308,69 @@ $\Delta\text{AUC}=+0.005$ with a bootstrap interval of $[-0.015,+0.023]$ --- not
 significant. Both negatives reinforce the paper's theme: under this
 distribution shift, the recoverable gain lay in the decision rule, not in
 feature selection or late fusion.
+
+\section{Physics-anchored self-training}
+\label{sec:adaptation}
+The threshold fix of \S\ref{sec:threshold} repairs the decision rule but leaves
+the model's orientation untouched. Here we ask whether the orientation itself can
+be corrected \emph{without any TESS labels}.
+
+The five physics checks are mission-agnostic: they encode transit geometry and
+eclipse morphology, not anything learned from Kepler. They can therefore
+supervise adaptation to a new mission. We form pseudo-labels from the physics
+verdict alone --- positive if all five checks pass and SDE $>12$, negative if any
+check fails --- train a random forest on TESS features against those
+pseudo-labels, and only then evaluate against the true ExoFOP labels. True labels
+are used for evaluation only, never for fitting, and all scores are out-of-fold.
+The pseudo-labels are weak: $192$ positives at $69\%$ purity and $213$ negatives
+at $63\%$, covering $405$ of $500$ targets.
+
+Two bars are worth separating. Beating \emph{physics alone} shows the model
+learned something beyond the rule that supervised it; beating the
+\emph{Kepler-trained model} would make adaptation a practical replacement.
+
+\paragraph{It clears the first bar.} The adapted model reaches ROC-AUC $0.672$
+against $0.602$ for the physics score that supervised it
+($\Delta=+0.070$, $95\%$ CI $[0.025,0.116]$). Weak, mission-agnostic supervision
+plus feature structure recovers more than the supervising rule alone: the
+features denoise the pseudo-labels.
+
+\paragraph{It does not clear the second.} Against the Kepler-trained ensemble
+($0.719$) the adapted model scores $-0.046$ ($[-0.098,+0.011]$) --- a deficit
+whose interval includes zero. The fair statement is parity, not superiority: using
+\emph{no labels whatsoever}, physics-anchored adaptation reaches statistical
+parity with a model trained on $7{,}325$ labeled Kepler objects. That is a
+useful property when no labeled data exist for a new mission, which is the
+situation at the start of any survey.
+
+\paragraph{Where it helps is mechanistically predicted.} The subgroup structure
+(Figure~\ref{fig:adaptation}) tracks the feature-direction inversion precisely.
+Adaptation wins in the deep-transit regime --- $+0.137$ for depths above
+$20{,}000$\,ppm and $+0.056$ for $5$--$20$k\,ppm --- exactly where the Kepler
+prior ``deep $\Rightarrow$ false positive'' is inverted on TESS. It loses where
+the Kepler model is already well-oriented ($-0.132$ below $5$k\,ppm, $-0.185$ at
+$P>6$\,d). The physics supervisor, having no mission-specific depth prior,
+produces a model that is correctly oriented in the regime where the transferred
+model is wrong.
+
+We tested whether that structure can be exploited by a depth-gated hybrid that
+routes deep targets to the adapted score and the rest to the Kepler model, with
+the gate chosen by inner cross-validation on the training fold only. It does not
+yield a significant gain ($\Delta\text{AUC}=+0.002$, $[-0.025,+0.030]$), and the
+selected gate is unstable across folds. We report this as a null result: the
+subgroup advantage is real and interpretable, but too small relative to the
+subgroup sizes to convert into an overall improvement at $n=500$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{adaptation.png}
+\caption{Left: out-of-fold ROC-AUC on TESS. Physics-anchored adaptation, trained
+without a single TESS label, beats the physics rule that supervised it and reaches
+parity with the Kepler-trained ensemble. Right: per-subgroup $\Delta$AUC against
+the Kepler model --- adaptation wins in the deep-transit regime where the Kepler
+prior is inverted, and loses where it is not.}
+\label{fig:adaptation}
+\end{figure}
 
 \section{ML $\times$ physics: agreement, and the limits of disagreement}
 The ML probability and the physics verdict are independent judgements. Crossing

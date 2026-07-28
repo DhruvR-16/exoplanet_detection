@@ -1,0 +1,101 @@
+{
+  "n_targets": 500,
+  "pseudo_labels": {
+    "rule": "positive = all 5 physics checks pass AND SDE > 12.0; negative = any physics check fails",
+    "n_positive": 192,
+    "n_negative": 213,
+    "n_unlabelled": 95,
+    "positive_purity_vs_truth": 0.6875,
+    "negative_purity_vs_truth": 0.6291,
+    "note": "purities are diagnostic only; true labels never enter fitting"
+  },
+  "auc": {
+    "auc_kepler_ml": 0.7186,
+    "auc_physics": 0.6019,
+    "auc_adapted": 0.6723,
+    "auc_blend": 0.7146,
+    "auc_depth_gated": 0.7203
+  },
+  "adapted_vs_physics": {
+    "delta": 0.07,
+    "ci95": [
+      0.0251,
+      0.1164
+    ],
+    "significant": true
+  },
+  "adapted_vs_kepler_ml": {
+    "delta": -0.0455,
+    "ci95": [
+      -0.0983,
+      0.0106
+    ],
+    "significant": false
+  },
+  "gated_vs_kepler_ml": {
+    "delta": 0.0019,
+    "ci95": [
+      -0.0252,
+      0.0301
+    ],
+    "significant": false
+  },
+  "gates_chosen_per_fold": [
+    5000,
+    30000,
+    5000,
+    5000,
+    5000
+  ],
+  "subgroups": [
+    {
+      "subgroup": "P < 2 d",
+      "n": 129,
+      "auc_kepler_ml": 0.7023,
+      "auc_adapted": 0.5811,
+      "delta": -0.1211
+    },
+    {
+      "subgroup": "P 2-6 d",
+      "n": 250,
+      "auc_kepler_ml": 0.7196,
+      "auc_adapted": 0.7428,
+      "delta": 0.0233
+    },
+    {
+      "subgroup": "P > 6 d",
+      "n": 121,
+      "auc_kepler_ml": 0.6645,
+      "auc_adapted": 0.4797,
+      "delta": -0.1847
+    },
+    {
+      "subgroup": "depth > 20k ppm",
+      "n": 42,
+      "auc_kepler_ml": 0.6178,
+      "auc_adapted": 0.7551,
+      "delta": 0.1373
+    },
+    {
+      "subgroup": "depth 5k-20k ppm",
+      "n": 131,
+      "auc_kepler_ml": 0.5776,
+      "auc_adapted": 0.6334,
+      "delta": 0.0558
+    },
+    {
+      "subgroup": "depth < 5k ppm",
+      "n": 327,
+      "auc_kepler_ml": 0.734,
+      "auc_adapted": 0.6022,
+      "delta": -0.1318
+    },
+    {
+      "subgroup": "Rp/Rs > 0.1",
+      "n": 71,
+      "auc_kepler_ml": 0.7325,
+      "auc_adapted": 0.7309,
+      "delta": -0.0016
+    }
+  ]
+}
