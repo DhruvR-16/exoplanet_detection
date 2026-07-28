@@ -67,6 +67,19 @@ SECONDARY_MIN_DEPTH = 100e-6
 MAX_DURATION_RATIO = 1.5
 DENSITY_RATIO_BOUNDS = (0.1, 30.0)
 
+# Decision threshold on the calibrated planet probability.
+#
+# The model is trained on Kepler but deployed on TESS. Under that domain shift
+# the calibrated probabilities are systematically compressed toward zero (Brier
+# degrades 0.08 -> 0.29), so the textbook 0.5 cut is far too strict here: on the
+# 500-target labeled TESS benchmark it recovers only 28% of real planets.
+# 0.117 is the Youden-optimal cut on that benchmark and is stable under 5-fold
+# cross-validation (threshold identical in every fold; held-out recall
+# 0.73 +/- 0.03 at precision 0.67). Using it raises F1 from 0.41 to 0.70.
+#
+# Set to 0.5 to recover the previous in-mission (Kepler) behavior.
+DECISION_THRESHOLD = 0.117
+
 # Kepler's third law in solar units, P in days:
 #   a / R_sun = 4.2119 * (M/M_sun)^(1/3) * P^(2/3)
 # Stellar mean density from the transit-fit a/R (Seager & Mallen-Ornelas 2003):
@@ -556,8 +569,16 @@ def load_model(model_dir: Path | str = MODEL_DIR) -> tuple[dict[str, Any] | None
     return None, None
 
 
-def predict(model_pkg: dict[str, Any], features: dict[str, float]) -> dict[str, Any]:
-    """Score a feature dict with a trained model package."""
+def predict(
+    model_pkg: dict[str, Any],
+    features: dict[str, float],
+    threshold: float | None = None,
+) -> dict[str, Any]:
+    """Score a feature dict with a trained model package.
+
+    `threshold` defaults to the model package's own `decision_threshold` if it
+    carries one, else the module-level DECISION_THRESHOLD (TESS-calibrated).
+    """
     names = model_pkg["feature_names"]
     missing = [n for n in names if n not in features]
     if missing:
@@ -569,12 +590,18 @@ def predict(model_pkg: dict[str, Any], features: dict[str, float]) -> dict[str, 
         x = scaler.transform(x)
     model = model_pkg["model"]
     probability = float(model.predict_proba(x)[0, 1])
-    prediction = int(probability >= 0.5)
-    distance = abs(probability - 0.5)
-    confidence = "High" if distance > 0.35 else "Medium" if distance > 0.20 else "Low"
+    if threshold is None:
+        threshold = float(model_pkg.get("decision_threshold", DECISION_THRESHOLD))
+    prediction = int(probability >= threshold)
+    # Confidence is distance from the operating point, normalized by how much
+    # room there is on that side, so it stays meaningful for any threshold.
+    span = (1.0 - threshold) if probability >= threshold else threshold
+    distance = abs(probability - threshold) / span if span > 0 else 0.0
+    confidence = "High" if distance > 0.60 else "Medium" if distance > 0.30 else "Low"
     return {
         "prediction": prediction,
         "probability": probability,
+        "threshold": threshold,
         "confidence": confidence,
         "result_text": "Planet Candidate Detected" if prediction == 1 else "No Planet Transit Detected",
     }
@@ -688,7 +715,9 @@ def build_explanation(result: dict[str, Any]) -> list[str]:
     if pred is not None:
         lines.append(
             f"ML classifier: calibrated ensemble (trained on 7,325 labeled Kepler objects) assigns "
-            f"a {pred['probability']:.1%} planet probability ({pred['confidence']} confidence)."
+            f"a {pred['probability']:.1%} planet probability ({pred['confidence']} confidence), "
+            f"against a {pred.get('threshold', DECISION_THRESHOLD):.1%} decision threshold "
+            "calibrated for TESS deployment."
         )
 
     failed = [
@@ -719,9 +748,12 @@ def build_explanation(result: dict[str, Any]) -> list[str]:
     elif not failed:
         verdict = (
             f"VERDICT: AMBIGUOUS — the transit shape passes all 5 physics checks, but the ML "
-            f"assigns only {pred['probability']:.1%} because signals this deep and short-period "
-            "are statistically dominated by eclipsing binaries in the labeled training data. "
-            "Follow-up (e.g. radial velocities) would be needed to decide."
+            f"assigns only {pred['probability']:.1%} (below the "
+            f"{pred.get('threshold', DECISION_THRESHOLD):.1%} threshold) because signals this "
+            "deep and short-period are statistically dominated by eclipsing binaries in the "
+            "Kepler training data — a known cross-mission bias, since TESS's confirmed planets "
+            "skew toward exactly these deep, short-period signals. Follow-up (e.g. radial "
+            "velocities) would be needed to decide."
         )
     else:
         verdict = (

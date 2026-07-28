@@ -186,7 +186,9 @@ def recover(time_arr: np.ndarray, injected_flux: np.ndarray, stellar: dict,
     return {
         "rec_period": p, "rec_sde": sde, "rec_depth_ppm": feats["depth_ppm"],
         "tls_recovered": int(tls_ok), "clf_probability": prob,
-        "clf_recovered": int(tls_ok and prob >= 0.5),
+        # Score against the same TESS-calibrated operating point the pipeline
+        # deploys with; a hardcoded 0.5 would understate completeness.
+        "clf_recovered": int(tls_ok and prob >= pipeline.DECISION_THRESHOLD),
     }
 
 

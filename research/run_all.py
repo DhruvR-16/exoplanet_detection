@@ -42,6 +42,7 @@ def main() -> None:
             stage(f"{name} figures", [mod, "--figures-only"])
         stage("Disagreement", ["disagreement"])
         stage("Baselines", ["baselines"])
+        stage("Error analysis", ["error_analysis"])
         return
 
     if args.smoke:
@@ -56,6 +57,7 @@ def main() -> None:
     stage("Bootstrap confidence intervals", ["statistics"])
     stage("Triage efficiency", ["triage"])
     stage("Validation audit", ["validate"])
+    stage("Error analysis", ["error_analysis"])
     print("\n✅ Full study reproduced. See research/results/ and docs/img/.", flush=True)
 
 

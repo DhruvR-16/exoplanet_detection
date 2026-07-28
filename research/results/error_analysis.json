@@ -1,0 +1,97 @@
+{
+  "n_targets": 500,
+  "auc": 0.7186,
+  "at_old_threshold": {
+    "threshold": 0.5,
+    "recall": 0.284,
+    "precision": 0.7172,
+    "f1": 0.4069,
+    "accuracy": 0.586,
+    "planets_found": 71,
+    "planets_missed": 179,
+    "false_alarms": 28
+  },
+  "at_fixed_threshold": {
+    "threshold": 0.117,
+    "recall": 0.724,
+    "precision": 0.6704,
+    "f1": 0.6962,
+    "accuracy": 0.684,
+    "planets_found": 181,
+    "planets_missed": 69,
+    "false_alarms": 89
+  },
+  "crossvalidated_threshold": {
+    "thresholds_per_fold": [
+      0.117,
+      0.1168,
+      0.1168,
+      0.1168,
+      0.1168
+    ],
+    "heldout_recall_mean": 0.728,
+    "heldout_recall_std": 0.0325,
+    "heldout_precision_mean": 0.6743,
+    "heldout_precision_std": 0.0436
+  },
+  "blind_spots": [
+    {
+      "subgroup": "P < 2 d",
+      "n": 43,
+      "recall_old": 0.0,
+      "recall_new": 0.3488
+    },
+    {
+      "subgroup": "P 2-6 d",
+      "n": 149,
+      "recall_old": 0.3154,
+      "recall_new": 0.7919
+    },
+    {
+      "subgroup": "P 6-15 d",
+      "n": 58,
+      "recall_old": 0.4138,
+      "recall_new": 0.8276
+    },
+    {
+      "subgroup": "depth < 1k ppm",
+      "n": 62,
+      "recall_old": 0.2097,
+      "recall_new": 0.5
+    },
+    {
+      "subgroup": "depth 1k-5k ppm",
+      "n": 75,
+      "recall_old": 0.4,
+      "recall_new": 0.7733
+    },
+    {
+      "subgroup": "depth 5k-20k ppm",
+      "n": 94,
+      "recall_old": 0.2979,
+      "recall_new": 0.9149
+    },
+    {
+      "subgroup": "depth > 20k ppm",
+      "n": 19,
+      "recall_old": 0.0,
+      "recall_new": 0.3158
+    },
+    {
+      "subgroup": "Rp/Rs > 0.1 (hot Jupiter)",
+      "n": 41,
+      "recall_old": 0.1707,
+      "recall_new": 0.6341
+    }
+  ],
+  "physics_fusion_test": {
+    "auc_ml_alone": 0.7186,
+    "auc_fusion_oof": 0.7231,
+    "delta_auc": 0.0047,
+    "delta_ci95": [
+      -0.0146,
+      0.0233
+    ],
+    "significant": false
+  }
+}
