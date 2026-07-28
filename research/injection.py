@@ -281,6 +281,13 @@ def finalize() -> None:
         logger.warning("No injection CSV yet.")
         return
     df = pd.read_csv(INJECTION_CSV)
+    # Re-derive classifier recovery from the stored probability so the maps
+    # always reflect the current operating point, even for rows logged under an
+    # earlier threshold (the CSV is resumable and long-lived).
+    if "clf_probability" in df.columns:
+        df["clf_recovered"] = (
+            (df["tls_recovered"] == 1) & (df["clf_probability"] >= pipeline.DECISION_THRESHOLD)
+        ).astype(int)
     df.to_parquet(INJECTION_PARQUET, index=False)
     logger.info("Wrote %s (%d injections)", INJECTION_PARQUET, len(df))
     make_figures(df)

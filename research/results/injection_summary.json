@@ -2,7 +2,7 @@
   "n_injections": 336,
   "n_valid": 336,
   "overall_tls_recovery": 0.712,
-  "overall_clf_recovery": 0.249,
+  "overall_clf_recovery": 0.553,
   "hosts": [
     "TIC 309792357",
     "TIC 402898317",

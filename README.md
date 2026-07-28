@@ -223,10 +223,11 @@ bootstrap/Wilson confidence intervals. Reproduce everything with
 
 **1 · Injection–recovery completeness.** Injecting `batman` transits into real,
 screened-quiet TESS light curves and running the full pipeline maps detection
-completeness over period and radius. The recovery "sweet spot" (4–6 R⊕, 2–8 day
-periods → ~100%) is bounded below by the detection floor (Earth-size: 0%), above
-by the classifier correctly *rejecting* giant EB-like depths, and toward long
-periods by having fewer transits per sector.
+completeness over period and radius — **0.71 (TLS) and 0.55 (TLS + classifier)**
+overall. Recovery is bounded below by the detection floor (0.8 R⊕: 0%; 1.5 R⊕:
+8%), toward long periods by having fewer transits per sector (0.69 at 2.4 d →
+0.43 at 12 d), and at the top by the classifier correctly *rejecting* the most
+giant, EB-like depths (peaks at 0.90 near 9 R⊕, falling to 0.67 at 13 R⊕).
 
 <img src="docs/img/injection_completeness_clf.png" alt="Injection-recovery completeness map" width="560"/>
 
@@ -250,7 +251,28 @@ missions: on Kepler deep transits skew toward eclipsing-binary FPs; among these
 TESS TOIs the deepest signals are disproportionately *confirmed planets* (both
 Mann–Whitney p < 10⁻⁴). A model that learned "deep ⇒ FP" is mis-oriented on TESS.
 
-**3 · ML × physics: agreement works, disagreement doesn't (honest result).** The
+**3 · The operating point matters more than the model.** Because the transferred
+probabilities are compressed toward zero, the textbook **p ≥ 0.5 cut recovers only
+28% of real planets** — and is *completely blind* to two subgroups: every planet
+with P < 2 d (0/43) and every one deeper than 20,000 ppm (0/19), which are exactly
+TESS's most characteristic detections. A cross-validated threshold of **0.117**
+(identical in all 5 folds, held-out recall 0.728 ± 0.033) fixes most of it:
+
+| | p ≥ 0.5 (old) | p ≥ 0.117 (fixed) |
+| :--- | :---: | :---: |
+| Recall | 0.284 | **0.724** |
+| Precision | 0.717 | 0.670 |
+| F1 | 0.407 | **0.696** |
+| Planets found | 71/250 | **181/250** |
+
+<img src="docs/img/error_analysis.png" alt="Threshold and blind-spot analysis" width="820"/>
+
+Two model-level fixes were tried and **did not work**: dropping the inverting
+features (AUC 0.703 → 0.699) and fusing physics flags with the ML score
+(ΔAUC +0.005, CI [−0.015, +0.023]). The recoverable gain was in the decision
+rule, not the feature set. Reproduce with `python -m research.error_analysis`.
+
+**4 · ML × physics: agreement works, disagreement doesn't (honest result).** The
 calibrated ML score and the 5-check physics verdict are *independent*. Crossing
 them into four quadrants (n = 500):
 
@@ -268,7 +290,7 @@ saying what survives is the point.
 
 <img src="docs/img/quadrant_purity_ci.png" alt="Quadrant purity with confidence intervals" width="560"/>
 
-**4 · Validation (not hallucinating).** A [validation battery](research/validate.py)
+**5 · Validation (not hallucinating).** A [validation battery](research/validate.py)
 confirms the results are real: a label-permutation test collapses the AUC to a null
 centered at 0.50 with the observed 0.72 far outside (**p = 0**); both verdicts are
 significantly associated with truth (Fisher p < 10⁻³); and **350/350** recovered TLS

@@ -39,7 +39,14 @@ $[0.67,0.76]$) on TESS, with the Brier score degrading from $0.08$ to $0.29$; th
 separating direction of the depth and radius features \emph{inverts} between
 missions, a concrete mechanism for the gap. The ensemble nonetheless remains the
 best cross-mission model, beating a one-parameter SNR cut and every other learner.
-(iii) \textbf{ML $\times$ physics}: the two independent verdicts \emph{agree}
+(iii) \textbf{The operating point matters more than the model}: because the
+transferred probabilities are compressed, the conventional $p\geq0.5$ cut recovers
+only $28\%$ of true planets and is entirely blind to two subgroups --- every
+planet with $P<2$\,d and every one deeper than $20{,}000$\,ppm, precisely TESS's
+most characteristic detections. A cross-validated threshold of $0.117$ (identical
+in every fold) raises recall to $0.72$ and $F_1$ from $0.41$ to $0.70$, while
+retraining without the inverting features does not help at all. (iv)
+\textbf{ML $\times$ physics}: the two independent verdicts \emph{agree}
 informatively --- both-agree-planet is $79\%$ pure ($[0.68,0.87]$, $3.7\times$
 enriched) and physics vetting independently rejects $54\%$ of false positives ---
 but we test and report an honest negative: their \emph{disagreement} does not
@@ -69,7 +76,10 @@ they disagree, and whether that structure is actionable. Our contributions are:
 (1) an injection--recovery completeness map for a feature-based classical ensemble
 on real TESS data; (2) an honest, confidence-interval-qualified account of
 Kepler$\rightarrow$TESS transfer, with a concrete distribution-shift mechanism;
-(3) an analysis of the ML--physics agreement structure, including a validated
+(3) the finding that the \emph{decision threshold}, not the model, dominates the
+practical cost of that shift --- with two subgroups rendered wholly invisible by
+the conventional cut, and two model-level remedies shown not to help;
+(4) an analysis of the ML--physics agreement structure, including a validated
 positive result (agreement is strongly predictive; physics adds orthogonal
 false-positive rejection) and an honest negative one (disagreement does not
 robustly surface extra planets, and physics-informed triage shows no reliable
@@ -126,22 +136,29 @@ intervals for purities.
 Figure~\ref{fig:completeness} shows the fraction of injected transits recovered
 (TLS finds the injected period at SDE $\geq 7$) across the period--radius grid,
 and the classifier-recovery map (additionally labeled a planet); overall recovery
-is $0.71$ (TLS) and $0.25$ (TLS\,+\,classifier). Detection efficiency vs.\
-injected SNR is shown in Figure~\ref{fig:effsnr}. Three features are notable and
-physically correct: sub-$2\,R_\oplus$ planets fall below the recovery floor;
-recovery declines with period as fewer transits fall in a sector; and giant
-``planets'' whose depth implies $R_p/R_\star \gtrsim 0.2$ are recovered by TLS but
-\emph{rejected} by the classifier as eclipsing-binary-like. The classifier's
-recovery therefore peaks at intermediate radius ($4$--$6\,R_\oplus$) rather than
-rising monotonically --- the model has learned the planet/EB boundary.
+is $0.71$ (TLS) and $0.55$ (TLS\,+\,classifier), both scored at the deployed
+operating point of \S\ref{sec:threshold}. Detection efficiency vs.\ injected SNR
+is shown in Figure~\ref{fig:effsnr}. Three features are notable and physically
+correct: sub-$2\,R_\oplus$ planets fall below the recovery floor ($0.00$ at
+$0.8\,R_\oplus$, $0.08$ at $1.5\,R_\oplus$); recovery declines with period as
+fewer transits fall in a sector ($0.69$ at $2.4$\,d to $0.43$ at $12$\,d); and
+the largest injected radii are recovered by TLS but preferentially dropped by the
+classifier, whose recovery peaks near $9\,R_\oplus$ ($0.90$) and falls to $0.67$
+at $13\,R_\oplus$ even though TLS finds $0.98$ of them. That last decline is the
+learned planet/EB boundary: depths implying $R_p/R_\star \gtrsim 0.2$ look
+eclipsing-binary-like. We note this suppression is much weaker than it appears
+under a naive $0.5$ decision cut, where giant-radius recovery collapses to $0.12$
+and the map's peak shifts misleadingly to $4$--$6\,R_\oplus$ --- an artifact of
+the operating point rather than a property of the model.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.49\linewidth]{injection_completeness_tls.png}
 \includegraphics[width=0.49\linewidth]{injection_completeness_clf.png}
 \caption{Detection completeness over injected period and radius: TLS recovery
-(left) and TLS\,+\,classifier recovery (right). The classifier suppresses the
-giant-radius corner because such depths are EB-like.}
+(left) and TLS\,+\,classifier recovery (right), at the deployed operating point.
+The classifier still suppresses the largest-radius corner, where depths imply
+$R_p/R_\star \gtrsim 0.2$ and look eclipsing-binary-like.}
 \label{fig:completeness}
 \end{figure}
 
@@ -154,6 +171,7 @@ threshold sits near the SDE\,$=7$ detection criterion.}
 \end{figure}
 
 \section{Cross-mission transfer}
+\label{sec:transfer}
 On the TESS benchmark the calibrated ensemble scores ROC-AUC
 $0.72$ ($95\%$ CI $[0.67,0.76]$), far below its Kepler cross-validation AUC of
 $0.964$, and its Brier score degrades from $0.08$ to $0.29$: the Kepler-calibrated
@@ -212,6 +230,76 @@ $0.058$ vs.\ $0.031$; both Mann--Whitney $p<10^{-4}$). A model that learned
 ``deep\,$\Rightarrow$\,false positive'' on Kepler is therefore actively
 mis-oriented on TESS --- explaining why more data cannot close the gap and why a
 mission-agnostic SNR cut competes with it.
+
+\section{The operating point is part of the transfer problem}
+\label{sec:threshold}
+A transferred model is usually reported by its ROC-AUC, a threshold-free
+quantity. Deployment, however, requires choosing a threshold, and we find that
+this choice --- not the model --- dominates the practical failure of cross-mission
+transfer.
+
+Because the Kepler-calibrated probabilities are compressed toward zero on TESS
+(\S\ref{sec:transfer}), the conventional $p \geq 0.5$ cut is far too strict. On the $500$-target
+benchmark it recovers only $28.4\%$ of true planets, discarding $179$ of $250$.
+The Youden-optimal cut on the same scores is $p \geq 0.117$, which raises recall
+to $0.724$ at a precision of $0.670$ --- $110$ additional real planets, at the
+cost of $28 \rightarrow 89$ false alarms. The $F_1$ score improves from $0.407$
+to $0.696$. Crucially, this is not threshold tuning on the evaluation set: under
+$5$-fold cross-validation, with the threshold selected on the training fold and
+applied to the held-out fold, the selected value is identical in every fold
+($0.117$) and held-out recall is $0.728 \pm 0.033$.
+
+The effect is concentrated in exactly the regions where the feature-direction
+inversion bites. At $p \geq 0.5$ two subgroups have \emph{zero} recall: all $43$
+planets with $P < 2$\,d, and all $19$ with depths above $20{,}000$\,ppm. These
+are TESS's most characteristic detections --- short-period giants --- and the
+Kepler prior ``deep and short $\Rightarrow$ eclipsing binary'' rejects every one.
+Moving the threshold restores them only partially ($0.349$ and $0.316$
+respectively; Table~\ref{tab:blindspots}), confirming that the operating point is
+a large but incomplete remedy for a genuine orientation error.
+
+\begin{table}[t]
+\centering
+\caption{Recall on true TESS planets by subgroup, at the conventional $0.5$ cut
+and at the cross-validated $0.117$ operating point.}
+\label{tab:blindspots}
+\begin{tabular}{lccc}
+\toprule
+Subgroup & $n$ & Recall @ $0.5$ & Recall @ $0.117$ \\
+\midrule
+$P < 2$\,d                       & 43  & 0.000 & 0.349 \\
+$P$ $2$--$6$\,d                  & 149 & 0.315 & 0.792 \\
+$P$ $6$--$15$\,d                 & 58  & 0.414 & 0.828 \\
+depth $<1$k\,ppm                 & 62  & 0.210 & 0.500 \\
+depth $5$k--$20$k\,ppm           & 94  & 0.298 & 0.915 \\
+depth $>20$k\,ppm                & 19  & 0.000 & 0.316 \\
+$R_p/R_\star > 0.1$ (hot Jupiter)& 41  & 0.171 & 0.634 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{error_analysis.png}
+\caption{Left: recall, precision and $F_1$ against the decision threshold; $F_1$
+peaks near $0.117$ and the conventional $0.5$ cut sits far into the
+recall-starved regime. Right: per-subgroup recall before and after, showing the
+two subgroups that were entirely invisible.}
+\label{fig:erroranalysis}
+\end{figure}
+
+\paragraph{Two model-level remedies that did not work.}
+We tested whether the inversion could be repaired at the model level rather than
+the threshold. First, dropping the mission-inverting features: retraining without
+depth (and without $R_p/R_\star$) does \emph{not} improve transfer --- TESS AUC
+moves from $0.703$ to $0.699$ and $0.674$ respectively, i.e.\ unchanged or worse.
+The shift is distributed across the feature space, not carried by one or two
+removable columns. Second, fusing the physics flags with the ML score: a logistic
+combiner over the score and the five checks, evaluated out-of-fold, gives
+$\Delta\text{AUC}=+0.005$ with a bootstrap interval of $[-0.015,+0.023]$ --- not
+significant. Both negatives reinforce the paper's theme: under this
+distribution shift, the recoverable gain lay in the decision rule, not in
+feature selection or late fusion.
 
 \section{ML $\times$ physics: agreement, and the limits of disagreement}
 The ML probability and the physics verdict are independent judgements. Crossing
@@ -323,10 +411,18 @@ The central message is methodological: a transit-detection pipeline is best
 reported as a \emph{characterized, validated decision system} --- a completeness
 map, a calibration curve, a cross-mission number with a confidence interval, and
 an explicit account of what does \emph{not} replicate --- rather than a single
-in-mission score. Two concrete, robust findings support acting on this: cross-mission
-transfer is severe ($0.96\!\rightarrow\!0.72$) with a diagnosable mechanism
-(feature-direction inversion), and independent physics vetting supplies real
+in-mission score. Three concrete, robust findings support acting on this:
+cross-mission transfer is severe ($0.96\!\rightarrow\!0.72$) with a diagnosable
+mechanism (feature-direction inversion); the deployed \emph{operating point}
+carries more practical weight than the model choice, with the conventional $0.5$
+cut discarding $72\%$ of real planets and blinding the pipeline entirely to
+short-period and deep transits; and independent physics vetting supplies real
 orthogonal false-positive rejection ($54\%$) that the learned score alone does not.
+The threshold result generalizes beyond this pipeline: any calibrated classifier
+carried across a domain shift inherits a source-calibrated decision rule, and
+reporting only a threshold-free AUC hides the resulting deployment failure
+entirely. We would encourage cross-mission studies to report a
+recall-at-operating-point alongside AUC.
 Where two independent verdicts \emph{agree}, confidence is high; where they
 disagree, the object is genuinely ambiguous --- we found no evidence that
 disagreement hides a recoverable population of planets, and we report that
