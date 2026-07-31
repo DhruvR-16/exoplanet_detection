@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 import warnings
 from pathlib import Path
 from typing import Any
@@ -172,6 +173,28 @@ def _extract_ffi_lightcurve(target: str, max_sectors: int) -> tuple[lk.LightCurv
     return stitched, len(curves)
 
 
+def _retry(fn, attempts: int = 3, base_delay: float = 2.0, what: str = "MAST call"):
+    """Run `fn`, retrying transient archive failures with exponential backoff.
+
+    MAST search and download calls fail intermittently on connection resets and
+    timeouts. Without retries these are indistinguishable from "no data exists",
+    which silently drops sectors and biases multi-sector runs toward targets
+    that happened to download cleanly.
+    """
+    last: Exception | None = None
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 - archive errors are not a fixed type
+            last = exc
+            if i < attempts - 1:
+                delay = base_delay * (2 ** i)
+                logger.warning("%s failed (attempt %d/%d): %s; retrying in %.0fs",
+                               what, i + 1, attempts, exc, delay)
+                time.sleep(delay)
+    raise last  # type: ignore[misc]
+
+
 def load_lightcurve(
     target: str,
     max_sectors: int = DEFAULT_MAX_SECTORS,
@@ -208,9 +231,11 @@ def load_lightcurve(
 
     source = "SPOC"
     try:
-        search = lk.search_lightcurve(target, mission="TESS", author="SPOC")
+        search = _retry(lambda: lk.search_lightcurve(target, mission="TESS", author="SPOC"),
+                        what=f"MAST search for {target}")
         if len(search) == 0:
-            search = lk.search_lightcurve(target, mission="TESS")
+            search = _retry(lambda: lk.search_lightcurve(target, mission="TESS"),
+                            what=f"MAST search (any author) for {target}")
             source = "TESS (non-SPOC)"
     except Exception as exc:
         return None, {"message": f"MAST search failed: {exc}", "source": None, "n_sectors": 0}
@@ -220,9 +245,12 @@ def load_lightcurve(
         curves = []
         for entry in search[:max_sectors]:
             try:
-                curves.append(_clean(entry.download()))
+                # Retried: MAST drops connections intermittently, and without a
+                # retry a single transient error silently costs a whole sector
+                # (the dominant failure mode in multi-sector runs).
+                curves.append(_clean(_retry(entry.download, what=f"sector download for {target}")))
             except Exception as exc:
-                logger.warning("Sector download failed for %s: %s", target, exc)
+                logger.warning("Sector download failed for %s after retries: %s", target, exc)
         if curves:
             lc = lk.LightCurveCollection(curves).stitch()
             n_used = len(curves)
