@@ -1,0 +1,117 @@
+{
+  "n_total": 500,
+  "n_dev": 400,
+  "n_test": 100,
+  "n_features": 15,
+  "features": [
+    "period_days",
+    "depth_ppm",
+    "duration_hrs",
+    "model_snr",
+    "rp_rs",
+    "log10_depth",
+    "log10_period",
+    "duration_over_period",
+    "sde",
+    "welch_p",
+    "duration_ratio",
+    "density_ratio",
+    "secondary_snr",
+    "stellar_r",
+    "stellar_m"
+  ],
+  "excluded_as_leakage": [
+    "n_points",
+    "n_sectors"
+  ],
+  "config": {
+    "model": "rf",
+    "n_estimators": 500,
+    "min_samples_leaf": 2,
+    "max_features": "sqrt"
+  },
+  "dev_crossval": {
+    "roc_auc": 0.7996,
+    "pr_auc": 0.7922,
+    "brier": 0.182,
+    "threshold": 0.5787,
+    "accuracy": 0.725,
+    "recall": 0.67,
+    "precision": 0.7528,
+    "f1": 0.709,
+    "recall_at_precision_0.8": 0.53,
+    "confusion": {
+      "tp": 134,
+      "fn": 66,
+      "fp": 44,
+      "tn": 156
+    }
+  },
+  "heldout_test": {
+    "roc_auc": 0.8324,
+    "pr_auc": 0.8323,
+    "brier": 0.1658,
+    "threshold": 0.5787,
+    "accuracy": 0.72,
+    "recall": 0.68,
+    "precision": 0.7391,
+    "f1": 0.7083,
+    "recall_at_precision_0.8": 0.6,
+    "confusion": {
+      "tp": 34,
+      "fn": 16,
+      "fp": 12,
+      "tn": 38
+    }
+  },
+  "top_features": [
+    {
+      "feature": "stellar_r",
+      "importance": 0.099
+    },
+    {
+      "feature": "duration_over_period",
+      "importance": 0.0968
+    },
+    {
+      "feature": "sde",
+      "importance": 0.0915
+    },
+    {
+      "feature": "stellar_m",
+      "importance": 0.0876
+    },
+    {
+      "feature": "log10_period",
+      "importance": 0.0665
+    },
+    {
+      "feature": "model_snr",
+      "importance": 0.0654
+    },
+    {
+      "feature": "period_days",
+      "importance": 0.0651
+    },
+    {
+      "feature": "rp_rs",
+      "importance": 0.065
+    },
+    {
+      "feature": "depth_ppm",
+      "importance": 0.0638
+    },
+    {
+      "feature": "log10_depth",
+      "importance": 0.0599
+    },
+    {
+      "feature": "duration_ratio",
+      "importance": 0.0512
+    },
+    {
+      "feature": "duration_hrs",
+      "importance": 0.051
+    }
+  ]
+}
