@@ -67,6 +67,11 @@ BENCHMARK_MAX_SECTORS = 1
 SHAPE_FIELDS = ("shape_vu", "flat_bottom_frac", "transit_symmetry",
                 "symmetry", "shape_ratio", "depth_std")
 
+# Stellar context already returned by the TIC lookup but previously discarded.
+# Limb-darkening coefficients are functions of Teff/log g, so they encode
+# stellar type; the uncertainties flag poorly characterized hosts.
+STELLAR_FIELDS = ("ld_a", "ld_b", "radius_unc", "mass_unc")
+
 # Columns written per target (schema is fixed so resume can append safely).
 FIELDS = (
     ["tic_id", "toi", "disposition", "label", "success", "error",
@@ -76,6 +81,7 @@ FIELDS = (
      "stellar_r", "stellar_m", "n_sectors", "n_points", "period_recovered"]
     + list(pipeline.FEATURE_NAMES)
     + list(SHAPE_FIELDS)
+    + list(STELLAR_FIELDS)
 )
 
 
@@ -157,6 +163,7 @@ def analyze_one(tic_id: int, toi, disposition: str, label: int, ref_period: floa
     row.update(pipeline.transit_shape_features(res["tls"]))
     row.update(symmetry=diag["symmetry"], shape_ratio=diag["shape_ratio"],
                depth_std=diag["depth_std"])
+    row.update({k: res["stellar"].get(k, 0.0) for k in STELLAR_FIELDS})
     return row
 
 

@@ -131,15 +131,33 @@ def get_stellar_params(target: str, meta: dict | None = None) -> dict[str, Any]:
     Falls back to solar values when the target has no TIC ID or the query fails,
     so the pipeline keeps working offline.
     """
-    solar = {"radius": 1.0, "mass": 1.0, "tic_id": None, "source": "solar fallback"}
+    solar = {"radius": 1.0, "mass": 1.0, "tic_id": None, "source": "solar fallback",
+             "ld_a": 0.0, "ld_b": 0.0, "radius_unc": 0.0, "mass_unc": 0.0}
     tic_id = parse_tic_id(target, meta)
     if tic_id is None:
         return solar
     try:
-        _ab, mass, _, _, radius, _, _ = catalog_info(TIC_ID=tic_id)
+        ab, mass, mass_lo, mass_hi, radius, radius_lo, radius_hi = catalog_info(TIC_ID=tic_id)
         radius = float(radius) if np.isfinite(radius) else 1.0
         mass = float(mass) if np.isfinite(mass) else 1.0
-        return {"radius": radius, "mass": mass, "tic_id": tic_id, "source": "TIC catalog"}
+
+        def _f(x: Any) -> float:
+            try:
+                v = float(x)
+                return v if np.isfinite(v) else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        # Quadratic limb-darkening coefficients are derived from the star's Teff
+        # and log g, so they carry stellar-type information the model otherwise
+        # never sees. Fractional radius/mass uncertainties flag poorly
+        # characterized hosts, where the transit-density check is unreliable.
+        ld_a, ld_b = (_f(ab[0]), _f(ab[1])) if isinstance(ab, (tuple, list)) and len(ab) >= 2 else (0.0, 0.0)
+        r_unc = (_f(radius_hi) - _f(radius_lo)) / radius if radius > 0 else 0.0
+        m_unc = (_f(mass_hi) - _f(mass_lo)) / mass if mass > 0 else 0.0
+        return {"radius": radius, "mass": mass, "tic_id": tic_id, "source": "TIC catalog",
+                "ld_a": ld_a, "ld_b": ld_b,
+                "radius_unc": abs(r_unc), "mass_unc": abs(m_unc)}
     except Exception as exc:  # network / catalog failures must not kill the run
         logger.warning("TIC %s catalog lookup failed (%s); using solar values", tic_id, exc)
         solar["tic_id"] = tic_id
