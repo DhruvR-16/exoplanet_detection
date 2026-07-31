@@ -354,9 +354,22 @@ def run_tls(
     stellar: dict[str, Any] | None = None,
     period_min: float = PERIOD_MIN_DAYS,
     period_max: float = PERIOD_MAX_DAYS,
-    use_threads: int = 1,
+    use_threads: int | None = None,
 ) -> Any:
-    """Run Transit Least Squares with stellar priors and a bounded period grid."""
+    """Run Transit Least Squares with stellar priors and a bounded period grid.
+
+    `use_threads` defaults to TLS_THREADS if set, else all but one core. The
+    period search is the pipeline's CPU bottleneck and parallelizes well, so
+    leaving it single-threaded wastes most of a modern machine.
+    """
+    # Measured on an 8-core M-series laptop: 1 thread 10.5s, 4 threads 9.3s,
+    # 7 threads 11.3s. TLS's internal multiprocessing costs more than it saves
+    # at this problem size, so stay single-threaded and parallelize across
+    # targets instead (see tess_benchmark --shard), which scales near-linearly
+    # because targets are independent.
+    if use_threads is None:
+        env = os.environ.get("TLS_THREADS")
+        use_threads = int(env) if env and env.isdigit() and int(env) > 0 else 1
     baseline = float(time[-1] - time[0]) if len(time) > 1 else 0.0
     # Require at least two transits within the observed baseline.
     period_max = max(period_min + 0.1, min(period_max, baseline / 2.0))
@@ -400,6 +413,81 @@ def transit_duration(tls_results: Any) -> float:
     except (AttributeError, TypeError, ValueError):
         pass
     return to_scalar(tls_results.duration)
+
+
+def centroid_offset_test(
+    target: str,
+    period: float,
+    t0: float,
+    duration_days: float,
+    max_sectors: int = 1,
+) -> dict[str, float]:
+    """Measure flux-centroid motion during transit, from pixel-level data.
+
+    A real transit on the target star leaves the photocenter stationary: the
+    star dims but does not move. A contaminating eclipsing binary elsewhere in
+    the aperture pulls the photocenter away from the target while it eclipses,
+    producing a measurable in- vs out-of-transit offset.
+
+    This is the one false-positive class that light-curve shape cannot reach.
+    A blended background EB produces a genuinely planet-like light curve, so
+    every check in `check_transit_physics` passes; only the pixel data betrays
+    it. Background EBs are the dominant TESS false-positive population, which
+    is why survey pipelines (ExoMiner, DAVE, the SPOC DV reports) all carry a
+    centroid branch.
+
+    Returns zeros when pixel data is unavailable, so the caller always gets the
+    full key set. `centroid_snr` is the quantity to threshold on: it is the
+    offset in units of its own scatter, so it is comparable across targets and
+    aperture sizes.
+    """
+    out = {"centroid_shift_px": 0.0, "centroid_snr": 0.0, "centroid_ok": 1.0}
+    if period <= 0 or duration_days <= 0:
+        return out
+    try:
+        search = _retry(lambda: lk.search_targetpixelfile(target, mission="TESS"),
+                        what=f"TPF search for {target}")
+        if len(search) == 0:
+            return out
+        tpf = _retry(search[0].download, what=f"TPF download for {target}")
+        if tpf is None:
+            return out
+        cols, rows = tpf.estimate_centroids(method="moments")
+        t = np.asarray(tpf.time.value, dtype=float)
+        c = np.asarray(getattr(cols, "value", cols), dtype=float)
+        r = np.asarray(getattr(rows, "value", rows), dtype=float)
+    except Exception as exc:  # noqa: BLE001 - archive/pixel failures are non-fatal
+        logger.warning("Centroid test unavailable for %s: %s", target, exc)
+        return out
+
+    good = np.isfinite(t) & np.isfinite(c) & np.isfinite(r)
+    if good.sum() < 20:
+        return out
+    t, c, r = t[good], c[good], r[good]
+
+    phase = _fold_phase(t, period, t0)
+    half = (duration_days / period) / 2.0
+    in_tr = np.abs(phase) < half
+    # Out-of-transit reference: a ring just outside the transit, so slow
+    # pointing drift affects both windows about equally.
+    out_tr = (np.abs(phase) > 1.5 * half) & (np.abs(phase) < 5.0 * half)
+    if in_tr.sum() < 5 or out_tr.sum() < 10:
+        return out
+
+    dc = float(np.median(c[in_tr]) - np.median(c[out_tr]))
+    dr = float(np.median(r[in_tr]) - np.median(r[out_tr]))
+    shift = float(np.hypot(dc, dr))
+    # Scatter of the out-of-transit centroid sets the noise floor; divide by
+    # sqrt(N_in) because the in-transit value is itself a median of N points.
+    sc = float(median_abs_deviation(c[out_tr], scale="normal"))
+    sr = float(median_abs_deviation(r[out_tr], scale="normal"))
+    noise = float(np.hypot(sc, sr)) / max(np.sqrt(in_tr.sum()), 1.0)
+    snr = shift / noise if noise > 0 else 0.0
+
+    out["centroid_shift_px"] = shift
+    out["centroid_snr"] = float(snr)
+    out["centroid_ok"] = float(snr < CENTROID_SNR_THRESHOLD)
+    return out
 
 
 def transit_shape_features(tls_results: Any) -> dict[str, float]:

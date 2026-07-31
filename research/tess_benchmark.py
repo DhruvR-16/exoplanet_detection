@@ -167,7 +167,16 @@ def analyze_one(tic_id: int, toi, disposition: str, label: int, ref_period: floa
     return row
 
 
-def run_benchmark(limit: int, max_sectors: int = BENCHMARK_MAX_SECTORS) -> None:
+def run_benchmark(limit: int, max_sectors: int = BENCHMARK_MAX_SECTORS,
+                  shard: int = 0, n_shards: int = 1) -> None:
+    """Process the labeled target list, appending one row per target.
+
+    With `n_shards` > 1 this process handles only every n-th target
+    (``index % n_shards == shard``) and writes to its own CSV, so several
+    processes can run concurrently without interleaving writes. Targets are
+    independent and each is dominated by network I/O plus a single-threaded TLS
+    search, so this scales far better than TLS's internal threading.
+    """
     global BENCHMARK_MAX_SECTORS
     BENCHMARK_MAX_SECTORS = max_sectors
     model_pkg, version = pipeline.load_model()
@@ -176,6 +185,9 @@ def run_benchmark(limit: int, max_sectors: int = BENCHMARK_MAX_SECTORS) -> None:
     logger.info("Loaded model %s", version)
 
     targets = load_labeled_targets(limit)
+    if n_shards > 1:
+        targets = targets.iloc[shard::n_shards]
+        logger.info("Shard %d/%d: %d targets", shard, n_shards, len(targets))
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     done: set[int] = set()
@@ -298,15 +310,38 @@ def main() -> None:
     ap.add_argument("--tag", default="", help="Suffix for output files (e.g. 's3' keeps runs separate)")
     ap.add_argument("--refresh-toi", action="store_true", help="Re-download the ExoFOP TOI table")
     ap.add_argument("--figures-only", action="store_true", help="Only regenerate figures from the CSV")
+    ap.add_argument("--shard", type=int, default=0, help="This worker's index (0-based)")
+    ap.add_argument("--n-shards", type=int, default=1,
+                    help="Total workers. Each takes every n-th target and writes its own CSV.")
+    ap.add_argument("--merge-shards", action="store_true",
+                    help="Concatenate <tag>_shardN.csv files into <tag>.csv, then finalize")
     args = ap.parse_args()
 
-    set_output_tag(args.tag)
+    if args.merge_shards:
+        set_output_tag(args.tag)
+        parts = sorted(RESULTS_DIR.glob(f"tess_benchmark_{args.tag}_shard*.csv" if args.tag
+                                        else "tess_benchmark_shard*.csv"))
+        if not parts:
+            raise SystemExit("No shard files found to merge.")
+        frames = [pd.read_csv(p) for p in parts]
+        merged = pd.concat(frames, ignore_index=True).drop_duplicates(subset="tic_id")
+        merged.to_csv(BENCHMARK_CSV, index=False)
+        logger.info("Merged %d shards -> %s (%d unique targets)",
+                    len(parts), BENCHMARK_CSV, len(merged))
+        finalize()
+        return
+
+    tag = args.tag
+    if args.n_shards > 1:
+        tag = f"{tag}_shard{args.shard}" if tag else f"shard{args.shard}"
+    set_output_tag(tag)
     if args.refresh_toi:
         download_toi_table()
     if args.figures_only:
         finalize()
     else:
-        run_benchmark(args.limit, max_sectors=args.max_sectors)
+        run_benchmark(args.limit, max_sectors=args.max_sectors,
+                      shard=args.shard, n_shards=args.n_shards)
 
 
 if __name__ == "__main__":
