@@ -61,6 +61,12 @@ SEED = 42
 # A TOI transit is, by construction, detectable within one sector.
 BENCHMARK_MAX_SECTORS = 1
 
+# Folded-transit shape metrics. Recorded for every target but deliberately not
+# part of pipeline.FEATURE_NAMES: the shipped v3 model was trained on the eight
+# scalar features and would break if the vector changed underneath it.
+SHAPE_FIELDS = ("shape_vu", "flat_bottom_frac", "transit_symmetry",
+                "symmetry", "shape_ratio", "depth_std")
+
 # Columns written per target (schema is fixed so resume can append safely).
 FIELDS = (
     ["tic_id", "toi", "disposition", "label", "success", "error",
@@ -69,6 +75,7 @@ FIELDS = (
      "has_secondary", "duration_ratio", "density_ratio", "secondary_snr",
      "stellar_r", "stellar_m", "n_sectors", "n_points", "period_recovered"]
     + list(pipeline.FEATURE_NAMES)
+    + list(SHAPE_FIELDS)
 )
 
 
@@ -145,6 +152,11 @@ def analyze_one(tic_id: int, toi, disposition: str, label: int, ref_period: floa
         n_points=res["data"]["n_points"], period_recovered=period_recovered,
     )
     row.update({k: feats[k] for k in pipeline.FEATURE_NAMES})
+    # Folded-transit shape: the V-vs-U discriminator plus the ingress/egress
+    # diagnostics the pipeline already computes but never surfaced.
+    row.update(pipeline.transit_shape_features(res["tls"]))
+    row.update(symmetry=diag["symmetry"], shape_ratio=diag["shape_ratio"],
+               depth_std=diag["depth_std"])
     return row
 
 

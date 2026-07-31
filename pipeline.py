@@ -356,6 +356,56 @@ def transit_duration(tls_results: Any) -> float:
     return to_scalar(tls_results.duration)
 
 
+def transit_shape_features(tls_results: Any) -> dict[str, float]:
+    """Shape of the folded transit - the classic planet vs eclipsing-binary test.
+
+    A planet transiting a much larger star produces a flat-bottomed, U-shaped
+    dip; a grazing or comparably-sized eclipsing binary produces a V-shape.
+    Scalar depth/duration features cannot express this, so the classifier has no
+    way to separate the two without it.
+
+    Measured on the folded *data* (`folded_phase`/`folded_y`) rather than the
+    fitted template, so it is an independent check on the TLS fit rather than a
+    restatement of it. The in-transit window is taken from the model curve,
+    which avoids assuming a phase convention.
+
+    Returns zeros when the folded arrays are unavailable, so callers always get
+    the full key set.
+    """
+    out = {"shape_vu": 0.0, "flat_bottom_frac": 0.0, "transit_symmetry": 0.0}
+    try:
+        mphase = np.asarray(tls_results.model_folded_phase, dtype=float)
+        model = np.asarray(tls_results.model_folded_model, dtype=float)
+        phase = np.asarray(tls_results.folded_phase, dtype=float)
+        flux = np.asarray(tls_results.folded_y, dtype=float)
+    except (AttributeError, TypeError, ValueError):
+        return out
+    in_transit = model < 1.0 - 1e-9
+    if in_transit.sum() < 3 or phase.size < 8:
+        return out
+    lo, hi = float(mphase[in_transit].min()), float(mphase[in_transit].max())
+    if not np.isfinite([lo, hi]).all() or hi <= lo:
+        return out
+    sel = (phase >= lo) & (phase <= hi)
+    if sel.sum() < 5:
+        return out
+    depth = 1.0 - flux[sel]                      # positive inside the dip
+    d_max = float(np.percentile(depth, 95))      # robust to single-point noise
+    if d_max <= 0:
+        return out
+    # U-shape -> mean depth close to max depth; V-shape -> much shallower mean.
+    out["shape_vu"] = float(np.clip(depth.mean() / d_max, 0.0, 2.0))
+    out["flat_bottom_frac"] = float((depth > 0.8 * d_max).mean())
+    # Asymmetry catches blends and residual detrending artifacts.
+    mid = 0.5 * (lo + hi)
+    left, right = depth[phase[sel] < mid], depth[phase[sel] >= mid]
+    if left.size > 2 and right.size > 2:
+        a, b = float(left.mean()), float(right.mean())
+        if max(a, b) > 0:
+            out["transit_symmetry"] = float(min(a, b) / max(a, b))
+    return out
+
+
 def extract_features(tls_results: Any) -> dict[str, float]:
     """Build the model feature vector (KOI-catalog units) from a TLS result."""
     period = to_scalar(tls_results.period)
