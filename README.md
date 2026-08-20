@@ -32,11 +32,13 @@ Give it any TESS target (`TOI-270`, `TIC 307210830`, …) and the pipeline will:
 5. **Classify** the candidate with a **calibrated RandomForest + XGBoost ensemble** trained on real NASA dispositions, returning a well-calibrated planet probability.
 6. **Explain** every verdict with a plain-English reasoning trail — data provenance, signal statistics, the outcome of each physics check, and the ML score — so you always know *why* a target was accepted or rejected.
 
-## Model results
+## Model results — held-out **Kepler** (in-mission)
 
 The classifier is trained on the **NASA Exoplanet Archive KOI cumulative catalog** — 7,325 Kepler objects of interest with definitive labels (2,745 `CONFIRMED` planets vs. 4,580 `FALSE POSITIVE`s; `CANDIDATE`s excluded). All numbers below are from a **held-out 20% test set** (n = 1,465) never seen during training or calibration.
 
-| Metric | Score |
+> ⚠️ **These are Kepler numbers, not TESS numbers.** The model trains on Kepler and is *deployed* on TESS, where performance is substantially lower: **ROC-AUC 0.72 [0.67, 0.76]** on a 500-target labeled TESS benchmark. Quantifying and diagnosing that gap is the point of the [research study](#-research-characterizing-the-pipeline) and the [paper](paper/paper.pdf) — don't quote the Kepler figure as a TESS result.
+
+| Metric (held-out Kepler, n = 1,465) | Score |
 | :--- | :--- |
 | Accuracy | **89.8%** |
 | ROC-AUC | **0.957** |
@@ -140,7 +142,8 @@ Feature units are identical between the KOI training catalog and the TLS outputs
 ## Quickstart
 
 ```bash
-git clone <repo-url> && cd expoplanet_detection
+git clone https://github.com/DhruvR-16/exoplanet_detection.git
+cd exoplanet_detection
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -182,7 +185,7 @@ jupyter notebook main.ipynb
 ## Project structure
 
 ```text
-expoplanet_detection/
+exoplanet_detection/
 ├── pipeline.py            # Core science: fetching, detrending, TLS, features, vetting
 ├── train_model.py         # Trains model v3 on the labeled KOI catalog; writes metrics + figures
 ├── app.py                 # Streamlit dashboard (UI only — imports pipeline.py)
