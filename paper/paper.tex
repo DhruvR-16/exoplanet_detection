@@ -34,8 +34,9 @@ benchmark: (i) \textbf{injection--recovery} maps detection completeness across
 period and radius, revealing a ``sweet spot'' bounded below by the noise floor,
 above by eclipsing-binary rejection, and toward long periods by transits per
 sector. (ii) \textbf{Cross-mission transfer} is severe but real: an ensemble
-scoring ROC-AUC $0.96$ in Kepler cross-validation falls to $0.72$ (95\% CI
-$[0.67,0.76]$) on TESS, with the Brier score degrading from $0.08$ to $0.29$; the
+scoring ROC-AUC $0.96$ in-mission on Kepler falls to $0.72$ (95\% CI
+$[0.67,0.76]$) on TESS, with the Brier score degrading from $0.08$ (held-out
+Kepler) to $0.29$; the
 separating direction of the depth and radius features \emph{inverts} between
 missions, a concrete mechanism for the gap. The ensemble nonetheless remains the
 best cross-mission model, beating a one-parameter SNR cut and every other learner.
@@ -130,8 +131,10 @@ filter, bins gap-aware to 10-minute cadence, and runs Transit Least Squares
 extract eight physical features --- period, transit depth (ppm), duration (hr),
 model SNR, $R_p/R_\star$, and log/ratio transforms --- in units matched to the KOI
 catalog, avoiding train/serve skew. A soft-voting RandomForest\,+\,XGBoost
-ensemble is probability-calibrated (Platt scaling) on a held-out split; in Kepler
-cross-validation it reaches ROC-AUC $0.964\pm0.006$ and a Brier score of $0.080$.
+ensemble is probability-calibrated (Platt scaling) on a held-out split. In Kepler
+five-fold cross-validation it reaches ROC-AUC $0.964\pm0.006$; on the held-out
+Kepler test set ($n=1465$, untouched by training or calibration) it scores
+ROC-AUC $0.957$ with a Brier score of $0.080$.
 Five orthogonal physics checks --- signal significance (SDE $\geq 7$), odd/even
 depth (Welch $t$-test with a $10\%$ effect-size guard), transit duration vs.\
 the circular-orbit maximum, transit-implied stellar density, and a
@@ -181,8 +184,9 @@ threshold sits near the SDE\,$=7$ detection criterion.}
 \section{Cross-mission transfer}
 \label{sec:transfer}
 On the TESS benchmark the calibrated ensemble scores ROC-AUC
-$0.72$ ($95\%$ CI $[0.67,0.76]$), far below its Kepler cross-validation AUC of
-$0.964$, and its Brier score degrades from $0.08$ to $0.29$: the Kepler-calibrated
+$0.72$ ($95\%$ CI $[0.67,0.76]$), far below its in-mission Kepler performance
+($0.964$ in cross-validation, $0.957$ on the held-out test set), and its Brier
+score degrades from $0.08$ on held-out Kepler to $0.29$: the Kepler-calibrated
 probabilities are miscalibrated on TESS (Figure~\ref{fig:tessroc}). The interval
 excludes both chance ($0.5$) and the in-mission value, so the transfer drop is
 large and robust. Class separation exists but is much weaker than in-mission: this

@@ -1,8 +1,10 @@
 {
   "n_injections": 336,
   "n_valid": 336,
-  "overall_tls_recovery": 0.712,
-  "overall_clf_recovery": 0.553,
+  "n_with_positive_snr": 333,
+  "overall_tls_recovery": 0.705,
+  "overall_clf_recovery": 0.548,
+  "clf_decision_threshold": 0.117,
   "hosts": [
     "TIC 309792357",
     "TIC 402898317",

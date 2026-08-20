@@ -330,13 +330,15 @@ def make_figures(df: pd.DataFrame) -> None:
         plt.setp(plt.getp(cbar.ax, "yticklabels"), color=theme.INK_MUTED)
         theme.save(fig, IMG_DIR / fname)
 
-    # Detection efficiency vs SNR (sigmoid-like completeness curve)
-    ok = ok[ok["inj_snr"] > 0]
-    if len(ok) >= 8:
-        bins = np.geomspace(max(ok["inj_snr"].min(), 1), ok["inj_snr"].max() + 1, 10)
+    # Detection efficiency vs SNR (sigmoid-like completeness curve).
+    # Needs a positive SNR to bin on; keep this subset local so the headline
+    # recovery rates below stay over the full valid sample and match n_valid.
+    with_snr = ok[ok["inj_snr"] > 0]
+    if len(with_snr) >= 8:
+        bins = np.geomspace(max(with_snr["inj_snr"].min(), 1), with_snr["inj_snr"].max() + 1, 10)
         centers = np.sqrt(bins[:-1] * bins[1:])
-        idx = np.digitize(ok["inj_snr"], bins) - 1
-        eff = [ok["tls_recovered"][idx == k].mean() if (idx == k).any() else np.nan
+        idx = np.digitize(with_snr["inj_snr"], bins) - 1
+        eff = [with_snr["tls_recovered"][idx == k].mean() if (idx == k).any() else np.nan
                for k in range(len(centers))]
         fig, ax = theme.new_fig("Detection efficiency vs injected SNR")
         ax.plot(centers, eff, color=theme.ACCENT, lw=2, marker="o", markersize=5)
@@ -348,9 +350,11 @@ def make_figures(df: pd.DataFrame) -> None:
     import json
     summary = {
         "n_injections": int(len(df)),
-        "n_valid": int(len(df[(df["error"].isna()) | (df["error"] == "")])),
+        "n_valid": int(len(ok)),
+        "n_with_positive_snr": int(len(with_snr)),
         "overall_tls_recovery": round(float(ok["tls_recovered"].mean()), 3) if len(ok) else None,
         "overall_clf_recovery": round(float(ok["clf_recovered"].mean()), 3) if len(ok) else None,
+        "clf_decision_threshold": round(float(pipeline.DECISION_THRESHOLD), 4),
         "hosts": sorted(df["host"].unique().tolist()),
     }
     (RESULTS_DIR / "injection_summary.json").write_text(json.dumps(summary, indent=2))
