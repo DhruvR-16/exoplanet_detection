@@ -24,6 +24,7 @@ keywords:
   - machine learning
   - cross-mission transfer
   - astronomy
-# Add a license (e.g. `license: MIT`) once a LICENSE file is in the repo.
-# When you mint a Zenodo DOI (see below), add it here as:
+license: MIT
+# After minting a Zenodo DOI, add it here so GitHub's "Cite this repository"
+# button surfaces it:
 # doi: 10.5281/zenodo.XXXXXXX

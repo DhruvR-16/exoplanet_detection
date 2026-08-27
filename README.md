@@ -341,3 +341,9 @@ TESS (TIC) target sets are disjoint — no leakage.
 Built on open data and open source: [NASA Exoplanet Archive](https://exoplanetarchive.ipac.caltech.edu/), [MAST](https://archive.stsci.edu/) / TESS SPOC, [lightkurve](https://docs.lightkurve.org/), [Transit Least Squares](https://github.com/hippke/tls) (Hippke & Heller 2019), [wotan](https://github.com/hippke/wotan), scikit-learn and XGBoost.
 
 *This project is for educational and research purposes.*
+
+## License & citation
+
+Released under the [MIT License](LICENSE). If you use this pipeline or the
+accompanying study, please cite it — see [`CITATION.cff`](CITATION.cff), or use
+GitHub's **Cite this repository** button in the sidebar.
