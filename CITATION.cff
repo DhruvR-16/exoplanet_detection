@@ -9,6 +9,7 @@ type: software
 authors:
   - given-names: Dhruv
     family-names: Ramani
+    orcid: 'https://orcid.org/0009-0000-8730-7563'
 repository-code: 'https://github.com/DhruvR-16/exoplanet_detection'
 url: 'https://github.com/DhruvR-16/exoplanet_detection'
 abstract: >-
