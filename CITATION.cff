@@ -26,6 +26,16 @@ keywords:
   - cross-mission transfer
   - astronomy
 license: MIT
-# After minting a Zenodo DOI, add it here so GitHub's "Cite this repository"
-# button surfaces it:
-# doi: 10.5281/zenodo.XXXXXXX
+doi: 10.5281/zenodo.22132135
+preferred-citation:
+  type: article
+  title: >-
+    How Well Does a Kepler-Trained Transit Classifier Transfer to TESS?
+    A Characterization Study
+  authors:
+    - given-names: Dhruv
+      family-names: Ramani
+      orcid: 'https://orcid.org/0009-0000-8730-7563'
+  doi: 10.5281/zenodo.22132135
+  year: 2026
+  month: 7

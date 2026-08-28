@@ -10,8 +10,10 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.139-009688?logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.55-FF4B4B?logo=streamlit&logoColor=white)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22132135.svg)](https://doi.org/10.5281/zenodo.22132135)
 
 📄 **[Read the paper (PDF)](paper/paper.pdf)** — *How Well Does a Kepler-Trained Transit Classifier Transfer to TESS? A Characterization Study*
+&nbsp;·&nbsp; published on Zenodo: [10.5281/zenodo.22132135](https://doi.org/10.5281/zenodo.22132135)
 
 <img src="docs/img/pipeline_phase_fold.png" alt="Phase-folded transit of TOI-270 with the fitted TLS model" width="720"/>
 
