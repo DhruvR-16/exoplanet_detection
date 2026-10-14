@@ -170,13 +170,22 @@ def _clean(lc: lk.LightCurve) -> lk.LightCurve:
     return lc.remove_nans().remove_outliers(sigma_upper=3.0, sigma_lower=20.0).normalize()
 
 
-def _extract_ffi_lightcurve(target: str, max_sectors: int) -> tuple[lk.LightCurve | None, int]:
+def _extract_ffi_lightcurve(
+    target: str, max_sectors: int, sector_order: str = "earliest"
+) -> tuple[lk.LightCurve | None, int]:
     """Fallback: build a lightcurve from TESS Full Frame Images via TESScut."""
     search = lk.search_tesscut(target)
     if len(search) == 0:
         return None, 0
     curves = []
-    for entry in search[: min(max_sectors, 2)]:  # FFI cutouts are slow to download
+    n_selected = min(max_sectors, 2)  # FFI cutouts are slow to download
+    if sector_order == "latest":
+        starts = np.asarray(search.table["t_min"], dtype=float)
+        newest = np.argsort(np.nan_to_num(starts, nan=-np.inf))[-n_selected:]
+        selected = search[newest[np.argsort(starts[newest])]]
+    else:
+        selected = search[:n_selected]
+    for entry in selected:
         try:
             tpf = entry.download(cutout_size=11)
             mask = tpf.create_threshold_mask(threshold=3.0, reference_pixel="center")
@@ -288,7 +297,7 @@ def load_lightcurve(
     if lc is None and allow_ffi:
         source = "TESScut FFI"
         try:
-            lc, n_used = _extract_ffi_lightcurve(target, max_sectors)
+            lc, n_used = _extract_ffi_lightcurve(target, max_sectors, sector_order)
         except Exception as exc:
             return None, {"message": f"FFI extraction failed: {exc}", "source": None, "n_sectors": 0}
 
