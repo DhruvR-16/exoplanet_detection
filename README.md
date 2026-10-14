@@ -67,7 +67,7 @@ python train_model.py            # add --refresh-data to force a fresh catalog d
 
 ## Pipeline in action
 
-Real output for TOI-270 (M-dwarf multi-planet system), produced by [`main.ipynb`](main.ipynb):
+Real output for TOI-270 (M-dwarf multi-planet system), produced by [`main.py`](main.py):
 
 <img src="docs/img/pipeline_detrend.png" alt="Raw flux with wotan trend, and detrended flux" width="850"/>
 
@@ -115,7 +115,7 @@ flowchart TD
     I --> J
 ```
 
-Everything scientific lives in **[`pipeline.py`](pipeline.py)** — the Streamlit app, the FastAPI backend, and the notebook are thin clients of the same module, so results are identical everywhere.
+Everything scientific lives in **[`pipeline.py`](pipeline.py)** — the Streamlit app, the FastAPI backend, and the Python walkthrough are thin clients of the same module, so results are identical everywhere.
 
 ### Model features
 
@@ -166,16 +166,16 @@ cd backend && uvicorn main:app --reload --port 8000
 cd frontend && npm install && npm run dev    # opens http://localhost:3000
 ```
 
-**Notebook walkthrough:**
+**Python walkthrough:**
 
 ```bash
-jupyter notebook main.ipynb
+python main.py
 ```
 
-The notebook's code cells and function definitions are also exported unchanged
-to [`main.py`](main.py). Run the direct export with `python main.py`.
+The original notebook's code cells and function definitions are preserved in
+[`main.py`](main.py).
 
-**Python version of the notebook** (runs the same pipeline once, saves three plots
+**Command line analysis** (runs the same pipeline once, saves three plots
 and a JSON report):
 
 ```bash
@@ -217,7 +217,9 @@ exoplanet_detection/
 ├── pipeline.py            # Core science: fetching, detrending, TLS, features, vetting
 ├── train_model.py         # Trains model v3 on the labeled KOI catalog; writes metrics + figures
 ├── app.py                 # Streamlit dashboard (UI only — imports pipeline.py)
-├── main.ipynb             # Executed walkthrough notebook with real outputs
+├── main.py                # Python walkthrough with the original notebook code
+├── notebook_analysis.py   # Parameterized command line analysis
+├── hunt_planets.py        # Current TOI screening and residual search
 ├── backend/
 │   └── main.py            # FastAPI wrapper around pipeline.analyze()
 ├── frontend/
