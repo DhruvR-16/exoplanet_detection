@@ -37,7 +37,8 @@ def load_catalog(path: Path | None) -> tuple[pd.DataFrame, str]:
         df = pd.read_csv(path, low_memory=False)
         source = str(path.resolve())
     needed = {"TIC ID", "TOI", "TFOPWG Disposition", "Period (days)",
-              "Epoch (BJD)", "Duration (hours)", "TESS Mag"}
+              "Epoch (BJD)", "Duration (hours)", "TESS Mag",
+              "Date TOI Alerted (UTC)", "Date Modified"}
     if not needed.issubset(df.columns):
         raise ValueError(f"TOI table lacks columns: {sorted(needed - set(df.columns))}")
     return df, source
@@ -47,12 +48,14 @@ def select_targets(df: pd.DataFrame, limit: int) -> pd.DataFrame:
     candidates = df[df["TFOPWG Disposition"].isin(["PC", "APC"])].copy()
     for column in ("TOI", "Period (days)", "TESS Mag", "TIC ID"):
         candidates[column] = pd.to_numeric(candidates[column], errors="coerce")
+    candidates["alerted_at"] = pd.to_datetime(
+        candidates["Date TOI Alerted (UTC)"], errors="coerce")
     candidates = candidates[
         candidates["TIC ID"].notna()
         & candidates["Period (days)"].between(0.5, 15)
         & candidates["TESS Mag"].le(12)
     ]
-    return (candidates.sort_values("TOI", ascending=False)
+    return (candidates.sort_values(["alerted_at", "TOI"], ascending=False)
             .drop_duplicates("TIC ID").head(limit))
 
 
@@ -154,8 +157,11 @@ def main() -> None:
     report = {
         "run_utc": datetime.now(timezone.utc).isoformat(),
         "catalog_source": source,
+        "catalog_upstream": CATALOG_URL,
         "catalog_rows": len(catalog),
         "latest_toi": float(pd.to_numeric(catalog["TOI"], errors="coerce").max()),
+        "latest_catalog_modification": str(pd.to_datetime(
+            catalog["Date Modified"], errors="coerce").max()),
         "model_version": model_version,
         "sector_order": "latest",
         "refresh_lightcurves": not args.use_cache,
@@ -166,6 +172,7 @@ def main() -> None:
         known = catalog[pd.to_numeric(catalog["TIC ID"], errors="coerce") == tic]
         row = {"tic_id": tic, "target": f"TIC {tic}", "catalog_toi": str(item["TOI"]),
                "catalog_disposition": item["TFOPWG Disposition"],
+               "catalog_alert_date": str(item["Date TOI Alerted (UTC)"]),
                "catalog_period_days": float(item["Period (days)"])}
         logger.info("Analyzing %s (TOI %s)", row["target"], row["catalog_toi"])
         try:
