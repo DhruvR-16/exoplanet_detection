@@ -172,6 +172,9 @@ cd frontend && npm install && npm run dev    # opens http://localhost:3000
 jupyter notebook main.ipynb
 ```
 
+The notebook's code cells and function definitions are also exported unchanged
+to [`main.py`](main.py). Run the direct export with `python main.py`.
+
 **Python version of the notebook** (runs the same pipeline once, saves three plots
 and a JSON report):
 
