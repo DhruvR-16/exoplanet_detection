@@ -15,6 +15,7 @@ lc_cache/
 backend/lc_cache/
 pipeline_cache/
 predictions.csv
+analysis_output/
 
 # Research: keep small result tables + JSON summaries; drop logs and derived parquet
 research/results/*.log

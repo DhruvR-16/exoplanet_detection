@@ -172,6 +172,29 @@ cd frontend && npm install && npm run dev    # opens http://localhost:3000
 jupyter notebook main.ipynb
 ```
 
+**Python version of the notebook** (runs the same pipeline once, saves three plots
+and a JSON report):
+
+```bash
+python notebook_analysis.py --target "TOI-270" --latest --refresh
+```
+
+`--latest` selects the most recent available TESS sectors. `--refresh` bypasses
+the local lightcurve cache. Results go to `analysis_output/<target>/`.
+
+**Screen the newest unresolved TOIs and look for additional signals:**
+
+```bash
+python hunt_planets.py --limit 3 --max-sectors 1
+```
+
+This downloads the current ExoFOP TOI table and fresh TESS lightcurves, recovers
+the strongest transit, masks cataloged TOI transits on each host, then searches
+the residual lightcurve. Results go to `analysis_output/planet_hunt.json`, with
+catalog period matches and vetting flags. An unlisted signal is a lead for
+independent follow-up, not a confirmed planet; nearby blends, instrumental
+systematics, and false ephemerides need further checks.
+
 > The first analysis of a target downloads its lightcurves from MAST (≈1–2 min). Results are cached in `lc_cache/`, so re-runs take seconds to start and ~1 min for the TLS search.
 
 ### Example targets

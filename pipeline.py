@@ -217,20 +217,25 @@ def load_lightcurve(
     target: str,
     max_sectors: int = DEFAULT_MAX_SECTORS,
     allow_ffi: bool = True,
+    sector_order: str = "earliest",
+    refresh_cache: bool = False,
 ) -> tuple[lk.LightCurve | None, dict[str, Any]]:
     """Fetch, stitch and cache a normalized TESS lightcurve for `target`.
 
     Returns (lightcurve, info). On failure the lightcurve is None and
     info["message"] explains why. Always returns a 2-tuple.
     """
+    if sector_order not in {"earliest", "latest"}:
+        raise ValueError("sector_order must be 'earliest' or 'latest'")
     CACHE_DIR.mkdir(exist_ok=True)
     # Key the cache by sector budget so a 1-sector request and a 3-sector request
     # never collide (a star cached at 1 sector must not satisfy a 3-sector fetch).
-    cache_path = CACHE_DIR / f"{_safe_name(target)}_s{max_sectors}.fits"
+    suffix = "_latest" if sector_order == "latest" else ""
+    cache_path = CACHE_DIR / f"{_safe_name(target)}{suffix}_s{max_sectors}.fits"
     legacy_path = CACHE_DIR / f"{_safe_name(target)}.fits"
     # Reuse a pre-existing unsuffixed cache only if it actually holds at least the
     # requested number of sectors (older caches lacking the tag are assumed full).
-    if not cache_path.exists() and legacy_path.exists():
+    if not refresh_cache and sector_order == "earliest" and not cache_path.exists() and legacy_path.exists():
         try:
             legacy_sectors = int(lk.read(str(legacy_path)).meta.get("SECTORS", max_sectors))
         except Exception:
@@ -238,7 +243,7 @@ def load_lightcurve(
         if legacy_sectors >= max_sectors:
             cache_path = legacy_path
 
-    if cache_path.exists():
+    if cache_path.exists() and not refresh_cache:
         try:
             lc = lk.read(str(cache_path))
             n_sectors = int(lc.meta.get("SECTORS", 1))
@@ -261,7 +266,14 @@ def load_lightcurve(
     lc, n_used = None, 0
     if len(search) > 0:
         curves = []
-        for entry in search[:max_sectors]:
+        if sector_order == "latest":
+            # Select the newest observing sectors, then stitch them in time order.
+            starts = np.asarray(search.table["t_min"], dtype=float)
+            newest = np.argsort(np.nan_to_num(starts, nan=-np.inf))[-max_sectors:]
+            selected = search[newest[np.argsort(starts[newest])]]
+        else:
+            selected = search[:max_sectors]
+        for entry in selected:
             try:
                 # Retried: MAST drops connections intermittently, and without a
                 # retry a single transient error silently costs a whole sector
@@ -952,9 +964,12 @@ def analyze(
     target: str,
     model_pkg: dict[str, Any] | None = None,
     max_sectors: int = DEFAULT_MAX_SECTORS,
+    sector_order: str = "earliest",
+    refresh_cache: bool = False,
 ) -> dict[str, Any]:
     """Run the full pipeline for one target. Raises RuntimeError when no data exists."""
-    lc, info = load_lightcurve(target, max_sectors=max_sectors)
+    lc, info = load_lightcurve(target, max_sectors=max_sectors,
+                               sector_order=sector_order, refresh_cache=refresh_cache)
     if lc is None:
         raise RuntimeError(info["message"])
 
